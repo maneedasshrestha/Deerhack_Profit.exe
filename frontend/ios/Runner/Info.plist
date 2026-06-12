@@ -4,6 +4,12 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<!-- Feynman feature: spoken explanations are captured via the mic + on-device
+	     speech recognition. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Used to hear your explanation while you teach the AI student.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Used to transcribe your spoken explanation so the student can react to it.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
