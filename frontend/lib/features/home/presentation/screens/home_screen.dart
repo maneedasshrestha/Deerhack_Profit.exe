@@ -6,7 +6,6 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui_kit.dart';
 import '../../domain/mock_data.dart';
 import '../../domain/plan_data.dart';
-import '../widgets/home_top_bar.dart';
 import 'flashcards_screen.dart';
 import 'lesson_screen.dart';
 import 'mock_test_screen.dart';
@@ -22,32 +21,23 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     const week = PlanData.currentWeek;
     return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            const HomeTopBar(),
-            Expanded(
-              child: CustomScrollView(
-                physics: const BouncingScrollPhysics(),
-                slivers: [
-                  const SliverToBoxAdapter(child: _LastWeekRecap()),
-                  const SliverToBoxAdapter(
-                    child: StaggeredEntrance(
-                      index: 1,
-                      child: _WeekHeaderCard(week: week),
-                    ),
-                  ),
-                  SliverToBoxAdapter(child: _WeekPath(week: week)),
-                  const SliverToBoxAdapter(
-                    child: _NextWeekTeaser(),
-                  ),
-                  const SliverToBoxAdapter(child: SizedBox(height: 48)),
-                ],
-              ),
+      // The shared top bar lives in the shell above this screen.
+      body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          const SliverToBoxAdapter(child: _LastWeekRecap()),
+          const SliverToBoxAdapter(
+            child: StaggeredEntrance(
+              index: 1,
+              child: _WeekHeaderCard(week: week),
             ),
-          ],
-        ),
+          ),
+          SliverToBoxAdapter(child: _WeekPath(week: week)),
+          const SliverToBoxAdapter(
+            child: _NextWeekTeaser(),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 48)),
+        ],
       ),
     );
   }

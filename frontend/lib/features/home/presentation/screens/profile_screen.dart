@@ -23,36 +23,52 @@ class ProfileScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: p.bg,
       body: SafeArea(
-        child: CustomScrollView(
-          physics: const BouncingScrollPhysics(),
-          slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(6, 6, 20, 0),
-                child: Row(
-                  children: [
-                    IconButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: Icon(Icons.arrow_back_rounded,
-                          color: p.textSecondary),
-                      tooltip: 'Back',
-                    ),
-                  ],
-                ),
+        child: Column(
+          children: [
+            // Pinned header — the back button never scrolls away.
+            Container(
+              padding: const EdgeInsets.fromLTRB(6, 4, 20, 4),
+              decoration: BoxDecoration(
+                color: p.bg,
+                border:
+                    Border(bottom: BorderSide(color: p.hairline, width: 1)),
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: Icon(Icons.arrow_back_rounded,
+                        color: p.textSecondary),
+                    tooltip: 'Back',
+                  ),
+                  Text('Profile',
+                      style: Theme.of(context).textTheme.titleMedium),
+                ],
               ),
             ),
-            const SliverToBoxAdapter(
-                child: StaggeredEntrance(child: _ProfileHeader())),
-            const SliverToBoxAdapter(child: SectionHeader('Syllabus')),
-            const SliverToBoxAdapter(
-                child: StaggeredEntrance(index: 1, child: _SyllabusCard())),
-            const SliverToBoxAdapter(child: SectionHeader('Your plan')),
-            const SliverToBoxAdapter(
-                child: StaggeredEntrance(index: 2, child: _PlanTimelineCard())),
-            const SliverToBoxAdapter(child: SizedBox(height: 24)),
-            const SliverToBoxAdapter(
-                child: StaggeredEntrance(index: 3, child: _StarredSection())),
-            const SliverToBoxAdapter(child: SizedBox(height: 40)),
+            Expanded(
+              child: CustomScrollView(
+                physics: const BouncingScrollPhysics(),
+                slivers: [
+                  const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                  const SliverToBoxAdapter(
+                      child: StaggeredEntrance(child: _ProfileHeader())),
+                  const SliverToBoxAdapter(child: SectionHeader('Syllabus')),
+                  const SliverToBoxAdapter(
+                      child: StaggeredEntrance(
+                          index: 1, child: _SyllabusCard())),
+                  const SliverToBoxAdapter(child: SectionHeader('Your plan')),
+                  const SliverToBoxAdapter(
+                      child: StaggeredEntrance(
+                          index: 2, child: _PlanTimelineCard())),
+                  const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                  const SliverToBoxAdapter(
+                      child: StaggeredEntrance(
+                          index: 3, child: _StarredSection())),
+                  const SliverToBoxAdapter(child: SizedBox(height: 40)),
+                ],
+              ),
+            ),
           ],
         ),
       ),

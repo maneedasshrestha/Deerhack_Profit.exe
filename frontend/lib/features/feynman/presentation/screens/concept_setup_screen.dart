@@ -40,7 +40,8 @@ class _ConceptSetupScreenState extends ConsumerState<ConceptSetupScreen> {
     final version = repo.nextVersion(conceptId);
 
     _focus.unfocus();
-    Navigator.of(context).push(
+    // Full-screen flow: escape the tab navigator (and the shared top bar).
+    Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
         builder: (_) => LiveVoiceScreen(
           args: SessionArgs(

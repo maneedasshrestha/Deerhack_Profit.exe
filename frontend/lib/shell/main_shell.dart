@@ -4,6 +4,7 @@ import '../core/theme/app_theme.dart';
 import '../features/duel/presentation/screens/duel_screen.dart';
 import '../features/feynman/presentation/screens/concept_setup_screen.dart';
 import '../features/home/presentation/screens/home_screen.dart';
+import '../features/home/presentation/widgets/home_top_bar.dart';
 
 /// Three-tab root shell:
 ///   0 — Learn tab  (weekly Duolingo-style plan)
@@ -63,13 +64,27 @@ class _MainShellState extends State<MainShell> {
         }
       },
       child: Scaffold(
-        body: IndexedStack(
-          index: _index,
-          children: [
-            _Tab(navigatorKey: _keys[0], child: const HomeScreen()),
-            _Tab(navigatorKey: _keys[1], child: const ConceptSetupScreen()),
-            _Tab(navigatorKey: _keys[2], child: const DuelScreen()),
-          ],
+        // Shared top bar above every tab — the account section and the exam
+        // countdown stay visible no matter where you are.
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              const HomeTopBar(),
+              Expanded(
+                child: IndexedStack(
+                  index: _index,
+                  children: [
+                    _Tab(navigatorKey: _keys[0], child: const HomeScreen()),
+                    _Tab(
+                        navigatorKey: _keys[1],
+                        child: const ConceptSetupScreen()),
+                    _Tab(navigatorKey: _keys[2], child: const DuelScreen()),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _index,

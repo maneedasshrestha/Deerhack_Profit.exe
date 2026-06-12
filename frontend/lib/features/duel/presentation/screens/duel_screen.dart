@@ -1,8 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui_kit.dart';
 import '../../../home/domain/mock_data.dart';
+import 'duel_race_screen.dart';
+
+/// Push the head-to-head race over the whole shell (it's a full-screen flow).
+void _startRace(BuildContext context, String opponentName) {
+  Navigator.of(context, rootNavigator: true).push(
+    MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => DuelRaceScreen(opponentName: opponentName),
+    ),
+  );
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // DuelScreen — deliberately minimal. One idea: race a friend through the same
@@ -48,6 +61,7 @@ class _Hero extends StatefulWidget {
 class _HeroState extends State<_Hero> with SingleTickerProviderStateMixin {
   late final AnimationController _pulse;
   bool _searching = false;
+  Timer? _matchTimer;
 
   @override
   void initState() {
@@ -58,6 +72,7 @@ class _HeroState extends State<_Hero> with SingleTickerProviderStateMixin {
 
   @override
   void dispose() {
+    _matchTimer?.cancel();
     _pulse.dispose();
     super.dispose();
   }
@@ -66,7 +81,16 @@ class _HeroState extends State<_Hero> with SingleTickerProviderStateMixin {
     setState(() => _searching = !_searching);
     if (_searching) {
       _pulse.repeat(reverse: true);
+      // Mock matchmaking: "find" an opponent after a short search.
+      _matchTimer = Timer(const Duration(milliseconds: 1800), () {
+        if (!mounted || !_searching) return;
+        setState(() => _searching = false);
+        _pulse.stop();
+        _pulse.value = 0;
+        _startRace(context, 'Priya Shah');
+      });
     } else {
+      _matchTimer?.cancel();
       _pulse.stop();
       _pulse.value = 0;
     }
@@ -258,7 +282,7 @@ class _FriendRow extends StatelessWidget {
           ),
           if (online)
             Pressable(
-              onTap: () {},
+              onTap: () => _startRace(context, friend['name'] as String),
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
