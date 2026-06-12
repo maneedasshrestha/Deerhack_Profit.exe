@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../app.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../application/providers.dart';
 import '../../application/session_args.dart';
@@ -11,8 +10,9 @@ import '../widgets/orb/feynman_orb.dart';
 import '../widgets/primary_button.dart';
 import 'live_voice_screen.dart';
 
-/// Entry screen. Pick a concept to teach, or revisit a recent one. Generous
-/// negative space; the orb sits up top as a calm preview of the live mode.
+/// Entry screen for the Feynman coach. Pick a topic, explain it in your own
+/// words, and the coach returns constructive criticism on exactly where the
+/// explanation fell short.
 class ConceptSetupScreen extends ConsumerStatefulWidget {
   const ConceptSetupScreen({super.key});
 
@@ -58,13 +58,23 @@ class _ConceptSetupScreenState extends ConsumerState<ConceptSetupScreen> {
     return '$slug-${DateTime.now().microsecondsSinceEpoch}';
   }
 
+  /// One clean row per topic. Defensive de-dupe by normalised name so legacy
+  /// double-saved sessions can never show twice in the history.
+  List<FeynmanSession> _cleanHistory(List<FeynmanSession> recents) {
+    final seen = <String>{};
+    final out = <FeynmanSession>[];
+    for (final s in recents) {
+      final key = s.conceptName.trim().toLowerCase();
+      if (seen.add(key)) out.add(s);
+    }
+    return out;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
     final text = Theme.of(context).textTheme;
     final repo = ref.watch(sessionRepositoryProvider);
-    final recents = repo.latestPerConcept();
-    final themeMode = ref.watch(themeModeProvider);
+    final recents = _cleanHistory(repo.latestPerConcept());
 
     return Scaffold(
       body: SafeArea(
@@ -72,32 +82,11 @@ class _ConceptSetupScreenState extends ConsumerState<ConceptSetupScreen> {
           slivers: [
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
-                child: Row(
-                  children: [
-                    const Spacer(),
-                    IconButton(
-                      tooltip: 'Toggle theme',
-                      onPressed: () => ref.read(themeModeProvider.notifier).state =
-                          themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark,
-                      icon: Icon(
-                        themeMode == ThemeMode.dark
-                            ? Icons.light_mode_outlined
-                            : Icons.dark_mode_outlined,
-                        color: p.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 36),
                     Center(
                       child: Hero(
                         tag: 'feynman-orb',
@@ -113,13 +102,13 @@ class _ConceptSetupScreenState extends ConsumerState<ConceptSetupScreen> {
                       ),
                     ),
                     const SizedBox(height: 32),
-                    Text('Teach a student', style: text.displayMedium),
+                    Text('Feynman coach', style: text.displayMedium),
                     const SizedBox(height: 10),
                     Text(
-                      'Explain a concept out loud as if teaching a curious kid. '
-                      'They’ll react, ask the naive questions that expose your '
-                      'gaps, and you’ll see exactly where your understanding '
-                      'is fuzzy.',
+                      'Pick a topic and explain it out loud in your own '
+                      'words. Your coach listens, probes the shaky spots, '
+                      'and gives you constructive feedback on exactly where '
+                      'your explanation fell short.',
                       style: text.bodyMedium,
                     ),
                     const SizedBox(height: 28),
@@ -132,7 +121,7 @@ class _ConceptSetupScreenState extends ConsumerState<ConceptSetupScreen> {
                     ValueListenableBuilder(
                       valueListenable: _controller,
                       builder: (context, value, _) => PrimaryButton(
-                        label: 'Start teaching',
+                        label: 'Start session',
                         icon: Icons.graphic_eq_rounded,
                         onPressed:
                             value.text.trim().isEmpty ? null : () => _start(_controller.text),
@@ -140,7 +129,7 @@ class _ConceptSetupScreenState extends ConsumerState<ConceptSetupScreen> {
                     ),
                     if (recents.isNotEmpty) ...[
                       const SizedBox(height: 40),
-                      Text('Recent concepts', style: text.titleMedium),
+                      Text('History', style: text.titleMedium),
                       const SizedBox(height: 12),
                     ],
                   ],
@@ -151,7 +140,7 @@ class _ConceptSetupScreenState extends ConsumerState<ConceptSetupScreen> {
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
               sliver: SliverList.separated(
                 itemCount: recents.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 12),
+                separatorBuilder: (_, _) => const SizedBox(height: 10),
                 itemBuilder: (context, i) {
                   final s = recents[i];
                   final versions = repo.versionsOf(s.conceptId).length;
@@ -201,7 +190,7 @@ class _ConceptField extends StatelessWidget {
         cursorColor: p.accent,
         decoration: InputDecoration(
           border: InputBorder.none,
-          hintText: 'e.g. photosynthesis, recursion, inflation…',
+          hintText: 'e.g. projectile motion, integration, bonding…',
           hintStyle: text.bodyLarge?.copyWith(color: p.textTertiary),
         ),
       ),
@@ -231,7 +220,7 @@ class _RecentCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: p.hairline, width: 0.5),
@@ -244,10 +233,9 @@ class _RecentCard extends StatelessWidget {
                   children: [
                     Text(session.conceptName,
                         style: text.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 3),
                     Text(
-                      '$versionCount ${versionCount == 1 ? 'attempt' : 'attempts'} · '
-                      '${session.gaps.length} ${session.gaps.length == 1 ? 'gap' : 'gaps'}',
+                      '$versionCount ${versionCount == 1 ? 'session' : 'sessions'}',
                       style: text.labelSmall,
                     ),
                   ],

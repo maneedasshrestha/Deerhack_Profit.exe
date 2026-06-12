@@ -85,7 +85,7 @@ class ReflectionScreen extends ConsumerWidget {
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-                      child: Text('The conversation', style: text.titleMedium),
+                      child: Text('Session transcript', style: text.titleMedium),
                     ),
                   ),
                   if (session.transcript.isEmpty)
@@ -116,7 +116,7 @@ class ReflectionScreen extends ConsumerWidget {
                 border: Border(top: BorderSide(color: p.hairline, width: 0.5)),
               ),
               child: PrimaryButton(
-                label: 'Teach it again',
+                label: 'Explain it again',
                 icon: Icons.refresh_rounded,
                 onPressed: () => _teachAgain(context, ref),
               ),
@@ -286,12 +286,13 @@ class _GapsSection extends StatelessWidget {
             children: [
               Icon(Icons.lightbulb_outline_rounded, size: 18, color: p.warning),
               const SizedBox(width: 8),
-              Text('Gaps to close', style: text.titleMedium),
+              Text('Where you fell short', style: text.titleMedium),
             ],
           ),
           const SizedBox(height: 4),
           Text(
-            'Terms you used without explaining them in plain words.',
+            'Terms you leaned on without explaining in plain words — '
+            'start here on your next attempt.',
             style: text.bodyMedium,
           ),
           const SizedBox(height: 12),

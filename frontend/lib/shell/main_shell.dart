@@ -6,16 +6,16 @@ import '../features/feynman/presentation/screens/concept_setup_screen.dart';
 import '../features/home/presentation/screens/home_screen.dart';
 
 /// Three-tab root shell:
-///   0 — Feynman "Explain" tab  (already built)
-///   1 — Home / Learn tab       (Duolingo-style learning path)
-///   2 — Duel / Battle tab      (real-time versus lobby)
+///   0 — Learn tab  (weekly Duolingo-style plan)
+///   1 — Coach tab  (Feynman coach)
+///   2 — Duel tab   (real-time versus lobby)
 ///
 /// IndexedStack keeps every tab alive across switches so state (scroll
 /// position, in-progress lesson) is preserved. Each tab owns its own
 /// Navigator so internal pushes stay within the tab and the bottom nav
 /// remains visible.
 class MainShell extends StatefulWidget {
-  const MainShell({super.key, this.initialIndex = 1});
+  const MainShell({super.key, this.initialIndex = 0});
 
   final int initialIndex;
 
@@ -66,8 +66,8 @@ class _MainShellState extends State<MainShell> {
         body: IndexedStack(
           index: _index,
           children: [
-            _Tab(navigatorKey: _keys[0], child: const ConceptSetupScreen()),
-            _Tab(navigatorKey: _keys[1], child: const HomeScreen()),
+            _Tab(navigatorKey: _keys[0], child: const HomeScreen()),
+            _Tab(navigatorKey: _keys[1], child: const ConceptSetupScreen()),
             _Tab(navigatorKey: _keys[2], child: const DuelScreen()),
           ],
         ),
@@ -80,14 +80,14 @@ class _MainShellState extends State<MainShell> {
           labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
           destinations: [
             NavigationDestination(
-              icon: const Icon(Icons.psychology_outlined),
-              selectedIcon: Icon(Icons.psychology_rounded, color: p.accent),
-              label: 'Explain',
+              icon: const Icon(Icons.map_outlined),
+              selectedIcon: Icon(Icons.map_rounded, color: p.accent),
+              label: 'Learn',
             ),
             NavigationDestination(
-              icon: const Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home_rounded, color: p.accent),
-              label: 'Learn',
+              icon: const Icon(Icons.psychology_outlined),
+              selectedIcon: Icon(Icons.psychology_rounded, color: p.accent),
+              label: 'Coach',
             ),
             NavigationDestination(
               icon: const Icon(Icons.bolt_outlined),

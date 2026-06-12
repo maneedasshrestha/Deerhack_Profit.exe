@@ -180,7 +180,7 @@ class _LiveVoiceScreenState extends ConsumerState<LiveVoiceScreen> {
                     Navigator.of(sheetContext).pop();
                     controller.submitTyped(txt);
                   },
-                  child: const Text('Send to student'),
+                  child: const Text('Send to coach'),
                 ),
               ),
             ],
@@ -379,8 +379,8 @@ class _Hint extends StatelessWidget {
     final label = switch (phase.orbMode) {
       OrbMode.idle => 'Tap the orb to explain',
       OrbMode.listening => 'Listening — tap again when you’re done',
-      OrbMode.thinking => 'The student is thinking…',
-      OrbMode.speaking => 'The student is asking…',
+      OrbMode.thinking => 'Your coach is weighing your explanation…',
+      OrbMode.speaking => 'Your coach is responding…',
     };
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 250),

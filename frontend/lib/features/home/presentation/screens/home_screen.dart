@@ -3,39 +3,46 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/ui_kit.dart';
 import '../../domain/mock_data.dart';
+import '../../domain/plan_data.dart';
+import '../widgets/home_top_bar.dart';
+import 'flashcards_screen.dart';
 import 'lesson_screen.dart';
+import 'mock_test_screen.dart';
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// HomeScreen
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// HomeScreen — the weekly plan, rendered as a Duolingo-style path.
+// One week = daily MCQ levels → a bonus flashcard deck → Sunday's mock test.
+// ═══════════════════════════════════════════════════════════════════════════
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    const week = PlanData.currentWeek;
     return Scaffold(
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
-            _TopBar(),
+            const HomeTopBar(),
             Expanded(
               child: CustomScrollView(
                 physics: const BouncingScrollPhysics(),
                 slivers: [
-                  SliverToBoxAdapter(child: _DailyGoalCard()),
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
-                      child: Text(
-                        'Your learning path',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
+                  const SliverToBoxAdapter(child: _LastWeekRecap()),
+                  const SliverToBoxAdapter(
+                    child: StaggeredEntrance(
+                      index: 1,
+                      child: _WeekHeaderCard(week: week),
                     ),
                   ),
-                  const SliverToBoxAdapter(child: SizedBox(height: 4)),
-                  SliverToBoxAdapter(child: _LearningPath()),
-                  const SliverToBoxAdapter(child: SizedBox(height: 40)),
+                  SliverToBoxAdapter(child: _WeekPath(week: week)),
+                  const SliverToBoxAdapter(
+                    child: _NextWeekTeaser(),
+                  ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 48)),
                 ],
               ),
             ),
@@ -46,341 +53,133 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-// ─── Top bar ──────────────────────────────────────────────────────────────────
-class _TopBar extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final text = Theme.of(context).textTheme;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-      decoration: BoxDecoration(
-        color: p.surface,
-        border: Border(bottom: BorderSide(color: p.hairline, width: 0.5)),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 19,
-                backgroundColor: p.accent,
-                child: Text(
-                  MockData.userName[0],
-                  style: text.titleMedium?.copyWith(color: Colors.white),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Hey, ${MockData.userName.split(' ').first}! 👋',
-                      style: text.titleMedium,
-                    ),
-                    Text(
-                      '${MockData.daysToExam} days to ${MockData.examName}',
-                      style: text.labelSmall?.copyWith(color: p.textTertiary),
-                    ),
-                  ],
-                ),
-              ),
-              _StatPill(
-                icon: MockData.leagueIcon(MockData.league),
-                label: MockData.league,
-                iconColor: MockData.leagueColor(MockData.league),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _StatPill(
-                icon: Icons.local_fire_department_rounded,
-                label: '${MockData.streak}',
-                iconColor: const Color(0xFFFF6B35),
-              ),
-              const SizedBox(width: 8),
-              _StatPill(
-                icon: Icons.diamond_rounded,
-                label: '${MockData.xp} XP',
-                iconColor: const Color(0xFF8B7CF6),
-              ),
-              const SizedBox(width: 8),
-              _StatPill(
-                icon: Icons.schedule_rounded,
-                label: '${MockData.daysToExam}d left',
-                iconColor: const Color(0xFF10B981),
-              ),
-              const Spacer(),
-              _LevelBar(),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatPill extends StatelessWidget {
-  const _StatPill({required this.icon, required this.label, required this.iconColor});
-  final IconData icon;
-  final String label;
-  final Color iconColor;
+// ─── Last week recap (subtle, above the fold) ─────────────────────────────────
+class _LastWeekRecap extends StatelessWidget {
+  const _LastWeekRecap();
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     final text = Theme.of(context).textTheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: p.surfaceHigh,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: p.hairline, width: 0.5),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: iconColor),
-          const SizedBox(width: 5),
-          Text(label, style: text.labelMedium),
-        ],
-      ),
-    );
-  }
-}
-
-class _LevelBar extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final text = Theme.of(context).textTheme;
-    final progress = MockData.xp / MockData.xpForNextLevel;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          'Lv.${MockData.level}',
-          style: text.labelMedium?.copyWith(
-            color: p.accent,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(width: 7),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: SizedBox(
-            width: 64,
-            height: 7,
-            child: LinearProgressIndicator(
-              value: progress,
-              backgroundColor: p.surfaceHigh,
-              valueColor: AlwaysStoppedAnimation(p.accent),
+    return StaggeredEntrance(
+      index: 0,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+        child: Row(
+          children: [
+            Icon(Icons.verified_rounded, size: 16, color: p.positive),
+            const SizedBox(width: 6),
+            Text(
+              'Week ${PlanData.lastWeekNumber} complete',
+              style: text.labelMedium?.copyWith(color: p.textSecondary),
             ),
-          ),
+            Text(
+              '  ·  mock ${PlanData.lastWeekMockPercent}%',
+              style: text.labelMedium?.copyWith(color: p.textTertiary),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
 
-// ─── Daily goal ───────────────────────────────────────────────────────────────
-class _DailyGoalCard extends StatelessWidget {
+// ─── Week header card ─────────────────────────────────────────────────────────
+class _WeekHeaderCard extends StatelessWidget {
+  const _WeekHeaderCard({required this.week});
+  final WeekPlan week;
+
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     final text = Theme.of(context).textTheme;
-    final progress = (MockData.dailyXpEarned / MockData.dailyXpGoal).clamp(0.0, 1.0);
-    final remaining = MockData.dailyXpGoal - MockData.dailyXpEarned;
-    final done = remaining <= 0;
-
     return Container(
-      margin: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: p.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: p.hairline, width: 0.5),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF7C3AED), Color(0xFF9F5BFF)],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: p.accent.withValues(alpha: 0.32),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text(
-                done ? "Today's goal complete! 🎉" : "Today's goal",
-                style: text.titleMedium,
-              ),
-              const Spacer(),
-              Text(
-                '${MockData.dailyXpEarned} / ${MockData.dailyXpGoal} XP',
-                style: text.labelSmall?.copyWith(color: p.textTertiary),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 10,
-              backgroundColor: p.surfaceHigh,
-              valueColor: AlwaysStoppedAnimation(
-                done ? const Color(0xFF10B981) : p.accent,
-              ),
-            ),
-          ),
-          const SizedBox(height: 7),
-          Text(
-            done
-                ? 'Excellent! ${MockData.streak}-day streak maintained 🔥'
-                : '$remaining XP to go  ·  complete lessons to earn XP',
-            style: text.bodyMedium?.copyWith(color: p.textTertiary),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Learning path
-// ═══════════════════════════════════════════════════════════════════════════════
-// Zigzag offsets from centre for each node (cycles with modulo).
-const _kOffsets = [45.0, 0.0, -45.0, 0.0];
-
-class _LearningPath extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        for (final unit in MockData.units) _UnitSection(unit: unit),
-      ],
-    );
-  }
-}
-
-// ─── Unit section (banner + zigzag nodes) ─────────────────────────────────────
-class _UnitSection extends StatelessWidget {
-  const _UnitSection({required this.unit});
-  final Unit unit;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _UnitBanner(unit: unit),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Column(
-            children: [
-              for (var i = 0; i < unit.chapters.length; i++) ...[
-                if (i > 0)
-                  _PathConnector(
-                    fromDx: _kOffsets[(i - 1) % _kOffsets.length],
-                    toDx: _kOffsets[i % _kOffsets.length],
-                    color: unit.color,
-                    solid: unit.chapters[i - 1].isCompleted,
-                  ),
-                Transform.translate(
-                  offset: Offset(_kOffsets[i % _kOffsets.length], 0),
-                  child: _ChapterNode(chapter: unit.chapters[i], unit: unit),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─── Unit banner ──────────────────────────────────────────────────────────────
-class _UnitBanner extends StatelessWidget {
-  const _UnitBanner({required this.unit});
-  final Unit unit;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    final c = unit.color;
-    return Container(
-      margin: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [c, c.withValues(alpha: 0.72)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: c.withValues(alpha: 0.28),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(unit.icon, color: Colors.white, size: 26),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  unit.subject.toUpperCase(),
+              Expanded(
+                child: Text(
+                  'WEEK ${week.weekNumber} OF ${week.totalWeeks}',
                   style: text.labelSmall?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.75),
-                    letterSpacing: 1.2,
+                    color: Colors.white.withValues(alpha: 0.8),
+                    letterSpacing: 1.6,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(unit.title,
-                    style: text.titleMedium?.copyWith(color: Colors.white)),
-                const SizedBox(height: 4),
-                Text(
-                  '${unit.completedCount} / ${unit.totalCount} chapters done',
-                  style: text.labelSmall
-                      ?.copyWith(color: Colors.white.withValues(alpha: 0.8)),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(
-            width: 44,
-            height: 44,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                CircularProgressIndicator(
-                  value: unit.progress,
-                  strokeWidth: 4,
-                  backgroundColor: Colors.white.withValues(alpha: 0.25),
-                  valueColor: const AlwaysStoppedAnimation(Colors.white),
-                ),
-                Text(
-                  '${(unit.progress * 100).round()}%',
+              ),
+              ProgressRing(
+                progress: week.progress,
+                size: 40,
+                strokeWidth: 4,
+                color: Colors.white,
+                backgroundColor: Colors.white.withValues(alpha: 0.25),
+                child: Text(
+                  '${week.completedCount}/${week.levels.length}',
                   style: text.labelSmall?.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
                     fontSize: 9,
                   ),
                 ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            week.theme,
+            style: text.headlineSmall?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
             ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final t in week.targets)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Text(
+                    t,
+                    style: text.labelSmall?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Drafted from last week\'s mock — clear every level, then prove '
+            'it in Sunday\'s test.',
+            style: text.labelMedium
+                ?.copyWith(color: Colors.white.withValues(alpha: 0.85)),
           ),
         ],
       ),
@@ -388,31 +187,105 @@ class _UnitBanner extends StatelessWidget {
   }
 }
 
-// ─── Path connector (diagonal line between two nodes) ─────────────────────────
-class _PathConnector extends StatelessWidget {
-  const _PathConnector({
-    required this.fromDx,
-    required this.toDx,
-    required this.color,
-    required this.solid,
-  });
+// ═══════════════════════════════════════════════════════════════════════════
+// The path
+// ═══════════════════════════════════════════════════════════════════════════
+const double _kAmplitude = 64;
 
-  final double fromDx;
-  final double toDx;
-  final Color color;
-  final bool solid;
+double _dxFor(int i) => math.sin(i * math.pi / 2) * _kAmplitude;
+
+class _WeekPath extends StatelessWidget {
+  const _WeekPath({required this.week});
+  final WeekPlan week;
+
+  void _open(BuildContext context, WeekLevel level) {
+    if (level.isLocked) {
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14)),
+            content: const Text('Finish the previous level to unlock this one'),
+          ),
+        );
+      return;
+    }
+    final route = switch (level.type) {
+      LevelType.mcq => MaterialPageRoute<void>(
+          fullscreenDialog: true,
+          builder: (_) => LessonScreen(
+            title: level.title,
+            questions: PlanData.questionsForLevel(level.id),
+          ),
+        ),
+      LevelType.flashcards => MaterialPageRoute<void>(
+          fullscreenDialog: true,
+          builder: (_) => const FlashcardsScreen(),
+        ),
+      LevelType.mockTest => MaterialPageRoute<void>(
+          fullscreenDialog: true,
+          builder: (_) => const MockTestScreen(),
+        ),
+    };
+    Navigator.of(context, rootNavigator: true).push(route);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final levels = week.levels;
+    return Padding(
+      padding: const EdgeInsets.only(top: 18),
+      child: Column(
+        children: [
+          for (var i = 0; i < levels.length; i++) ...[
+            if (i > 0)
+              _Connector(
+                fromDx: _dxFor(i - 1),
+                toDx: _dxFor(i),
+                done: levels[i - 1].isCompleted,
+              ),
+            StaggeredEntrance(
+              index: i + 2,
+              child: Transform.translate(
+                offset: Offset(_dxFor(i), 0),
+                child: _LevelNode(
+                  level: levels[i],
+                  onTap: () => _open(context, levels[i]),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Connector ────────────────────────────────────────────────────────────────
+class _Connector extends StatelessWidget {
+  const _Connector({
+    required this.fromDx,
+    required this.toDx,
+    required this.done,
+  });
+
+  final double fromDx, toDx;
+  final bool done;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
     return SizedBox(
       width: double.infinity,
-      height: 28,
+      height: 34,
       child: CustomPaint(
         painter: _ConnectorPainter(
           fromDx: fromDx,
           toDx: toDx,
-          lineColor: solid ? color : color.withValues(alpha: 0.22),
-          dashed: !solid,
+          color: done ? p.accent : p.accent.withValues(alpha: 0.18),
+          dashed: !done,
         ),
       ),
     );
@@ -423,42 +296,51 @@ class _ConnectorPainter extends CustomPainter {
   const _ConnectorPainter({
     required this.fromDx,
     required this.toDx,
-    required this.lineColor,
+    required this.color,
     required this.dashed,
   });
 
-  final double fromDx;
-  final double toDx;
-  final Color lineColor;
+  final double fromDx, toDx;
+  final Color color;
   final bool dashed;
 
   @override
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2;
-    final start = Offset(cx + fromDx, 0);
-    final end = Offset(cx + toDx, size.height);
+    final start = Offset(cx + fromDx, -4);
+    final end = Offset(cx + toDx, size.height + 4);
     final paint = Paint()
-      ..color = lineColor
-      ..strokeWidth = 4.5
+      ..color = color
+      ..strokeWidth = 5
+      ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
+    // Gentle S-curve instead of a straight diagonal.
+    final path = Path()
+      ..moveTo(start.dx, start.dy)
+      ..cubicTo(
+        start.dx,
+        start.dy + size.height * 0.55,
+        end.dx,
+        end.dy - size.height * 0.55,
+        end.dx,
+        end.dy,
+      );
+
     if (!dashed) {
-      canvas.drawLine(start, end, paint);
+      canvas.drawPath(path, paint);
       return;
     }
-    const dashLen = 5.0;
-    const gap = 5.0;
-    final dist = (end - start).distance;
-    var drawn = 0.0;
-    while (drawn < dist) {
-      final t1 = drawn / dist;
-      final t2 = math.min((drawn + dashLen) / dist, 1.0);
-      canvas.drawLine(
-        Offset.lerp(start, end, t1)!,
-        Offset.lerp(start, end, t2)!,
-        paint,
-      );
-      drawn += dashLen + gap;
+    for (final metric in path.computeMetrics()) {
+      var d = 0.0;
+      const dash = 7.0, gap = 7.0;
+      while (d < metric.length) {
+        canvas.drawPath(
+          metric.extractPath(d, math.min(d + dash, metric.length)),
+          paint,
+        );
+        d += dash + gap;
+      }
     }
   }
 
@@ -466,35 +348,32 @@ class _ConnectorPainter extends CustomPainter {
   bool shouldRepaint(_ConnectorPainter old) =>
       old.fromDx != fromDx ||
       old.toDx != toDx ||
-      old.lineColor != lineColor ||
+      old.color != color ||
       old.dashed != dashed;
 }
 
-// ─── Chapter node ─────────────────────────────────────────────────────────────
-class _ChapterNode extends StatefulWidget {
-  const _ChapterNode({required this.chapter, required this.unit});
-  final Chapter chapter;
-  final Unit unit;
+// ─── Level node ───────────────────────────────────────────────────────────────
+class _LevelNode extends StatefulWidget {
+  const _LevelNode({required this.level, required this.onTap});
+  final WeekLevel level;
+  final VoidCallback onTap;
 
   @override
-  State<_ChapterNode> createState() => _ChapterNodeState();
+  State<_LevelNode> createState() => _LevelNodeState();
 }
 
-class _ChapterNodeState extends State<_ChapterNode>
+class _LevelNodeState extends State<_LevelNode>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pulse;
-  late final Animation<double> _anim;
 
   @override
   void initState() {
     super.initState();
     _pulse = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500),
+      duration: const Duration(milliseconds: 1600),
     );
-    _anim = Tween<double>(begin: 0, end: 1)
-        .animate(CurvedAnimation(parent: _pulse, curve: Curves.easeInOut));
-    if (widget.chapter.isCurrent) _pulse.repeat(reverse: true);
+    if (widget.level.isCurrent) _pulse.repeat(reverse: true);
   }
 
   @override
@@ -503,74 +382,168 @@ class _ChapterNodeState extends State<_ChapterNode>
     super.dispose();
   }
 
-  void _openLesson(BuildContext context) {
-    if (widget.chapter.isLocked) return;
-    Navigator.of(context, rootNavigator: true).push(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) =>
-            LessonScreen(chapter: widget.chapter, unit: widget.unit),
-      ),
-    );
+  Color get _color {
+    final p = context.palette;
+    return switch (widget.level.type) {
+      LevelType.mcq => p.accent,
+      LevelType.flashcards => const Color(0xFFEC4899),
+      LevelType.mockTest => const Color(0xFFF59E0B),
+    };
   }
+
+  IconData get _icon => switch (widget.level.type) {
+        LevelType.mcq => Icons.menu_book_rounded,
+        LevelType.flashcards => Icons.style_rounded,
+        LevelType.mockTest => Icons.emoji_events_rounded,
+      };
 
   @override
   Widget build(BuildContext context) {
-    final ch = widget.chapter;
     final p = context.palette;
     final text = Theme.of(context).textTheme;
-    final color = widget.unit.color;
+    final level = widget.level;
+    final c = _color;
+    final big = level.type == LevelType.mockTest;
+    final diameter = big ? 84.0 : 72.0;
 
-    return GestureDetector(
-      onTap: () => _openLesson(context),
+    final Color bg;
+    final Color fg;
+    Border? border;
+    List<BoxShadow> shadows = const [];
+
+    if (level.isLocked) {
+      bg = const Color(0xFFEDEBF3);
+      fg = p.textTertiary;
+    } else if (level.isCompleted) {
+      bg = c;
+      fg = Colors.white;
+      shadows = [
+        BoxShadow(
+          color: c.withValues(alpha: 0.35),
+          blurRadius: 14,
+          offset: const Offset(0, 6),
+        ),
+      ];
+    } else if (level.isCurrent) {
+      bg = p.surface;
+      fg = c;
+      border = Border.all(color: c, width: 3.5);
+      shadows = [
+        BoxShadow(
+          color: c.withValues(alpha: 0.28),
+          blurRadius: 18,
+          offset: const Offset(0, 6),
+        ),
+      ];
+    } else {
+      bg = p.surface;
+      fg = c;
+      border = Border.all(color: c.withValues(alpha: 0.45), width: 2.5);
+      shadows = [
+        BoxShadow(
+          color: const Color(0xFF2A2150).withValues(alpha: 0.08),
+          blurRadius: 10,
+          offset: const Offset(0, 4),
+        ),
+      ];
+    }
+
+    return Pressable(
+      onTap: widget.onTap,
+      scale: 0.93,
       child: SizedBox(
-        width: 112,
+        width: 168,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (ch.isCurrent)
-              _ActionBadge(label: 'CONTINUE', color: color)
-            else if (ch.isAvailable)
-              _ActionBadge(label: 'START', color: color, outlined: true),
-            const SizedBox(height: 5),
+            if (level.isCurrent)
+              _StartBubble(color: c, pulse: _pulse)
+            else
+              Padding(
+                padding: const EdgeInsets.only(bottom: 5),
+                child: Text(
+                  level.dayLabel.toUpperCase(),
+                  style: text.labelSmall?.copyWith(
+                    color: level.isLocked ? p.textTertiary : c,
+                    letterSpacing: 1.1,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
             AnimatedBuilder(
-              animation: _anim,
-              builder: (context, child) => Stack(
-                alignment: Alignment.center,
-                children: [
-                  if (ch.isCurrent)
-                    Container(
-                      width: 72 + 20 * _anim.value,
-                      height: 72 + 20 * _anim.value,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: color.withValues(
-                          alpha: 0.22 * (1 - _anim.value),
+              animation: _pulse,
+              builder: (context, child) {
+                final t =
+                    Curves.easeInOut.transform(_pulse.value);
+                return Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    if (level.isCurrent)
+                      Container(
+                        width: diameter + 14 + 14 * t,
+                        height: diameter + 14 + 14 * t,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: c.withValues(alpha: 0.18 * (1 - t)),
                         ),
                       ),
+                    child!,
+                  ],
+                );
+              },
+              child: Container(
+                width: diameter,
+                height: diameter,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: bg,
+                  border: border,
+                  boxShadow: shadows,
+                ),
+                child: Center(
+                  child: Icon(
+                    level.isLocked ? Icons.lock_rounded : _icon,
+                    color: fg,
+                    size: big ? 38 : 30,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              level.title,
+              textAlign: TextAlign.center,
+              style: text.labelLarge?.copyWith(
+                color: level.isLocked ? p.textTertiary : p.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              level.subtitle,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: text.labelSmall?.copyWith(color: p.textTertiary),
+            ),
+            if (level.isCompleted) ...[
+              const SizedBox(height: 4),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var i = 0; i < 3; i++)
+                    Icon(
+                      i < level.stars
+                          ? Icons.star_rounded
+                          : Icons.star_border_rounded,
+                      size: 15,
+                      color: i < level.stars
+                          ? const Color(0xFFF59E0B)
+                          : p.textTertiary.withValues(alpha: 0.5),
                     ),
-                  child!,
                 ],
               ),
-              child: _NodeCircle(
-                chapter: ch,
-                unit: widget.unit,
-                onTap: () => _openLesson(context),
-              ),
-            ),
-            const SizedBox(height: 7),
-            Text(
-              ch.title,
-              maxLines: 2,
-              textAlign: TextAlign.center,
-              style: text.labelSmall?.copyWith(
-                color: ch.isLocked ? p.textTertiary : p.textSecondary,
-                height: 1.3,
-              ),
-            ),
-            const SizedBox(height: 5),
-            if (!ch.isLocked) _StarRow(count: ch.stars, color: color),
-            const SizedBox(height: 2),
+            ],
           ],
         ),
       ),
@@ -578,147 +551,132 @@ class _ChapterNodeState extends State<_ChapterNode>
   }
 }
 
-class _NodeCircle extends StatelessWidget {
-  const _NodeCircle({
-    required this.chapter,
-    required this.unit,
-    required this.onTap,
-  });
-  final Chapter chapter;
-  final Unit unit;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final ch = chapter;
-    final c = unit.color;
-
-    final Color bg;
-    final Color iconColor;
-    final IconData icon;
-    final Border? border;
-    final List<BoxShadow> shadows;
-
-    if (ch.isLocked) {
-      bg = p.surfaceHigh;
-      iconColor = p.textTertiary;
-      icon = Icons.lock_rounded;
-      border = Border.all(color: p.hairline);
-      shadows = const [];
-    } else if (ch.isCompleted) {
-      bg = c;
-      iconColor = Colors.white;
-      icon = unit.icon;
-      border = null;
-      shadows = [
-        BoxShadow(
-            color: c.withValues(alpha: 0.35), blurRadius: 14, offset: const Offset(0, 5)),
-      ];
-    } else if (ch.isCurrent) {
-      bg = c.withValues(alpha: 0.15);
-      iconColor = c;
-      icon = Icons.play_arrow_rounded;
-      border = Border.all(color: c, width: 3);
-      shadows = [
-        BoxShadow(
-            color: c.withValues(alpha: 0.3), blurRadius: 18, offset: const Offset(0, 6)),
-      ];
-    } else {
-      bg = p.surface;
-      iconColor = c;
-      icon = unit.icon;
-      border = Border.all(color: c.withValues(alpha: 0.6), width: 2.5);
-      shadows = [
-        BoxShadow(
-            color: p.hairline, blurRadius: 6, offset: const Offset(0, 2)),
-      ];
-    }
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: ch.isLocked ? null : onTap,
-        customBorder: const CircleBorder(),
-        child: Container(
-          width: 72,
-          height: 72,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: bg,
-            border: border,
-            boxShadow: shadows,
-          ),
-          child: Center(child: Icon(icon, color: iconColor, size: 30)),
-        ),
-      ),
-    );
-  }
-}
-
-class _ActionBadge extends StatelessWidget {
-  const _ActionBadge({
-    required this.label,
-    required this.color,
-    this.outlined = false,
-  });
-  final String label;
+/// The bobbing "START" callout above the current node.
+class _StartBubble extends StatelessWidget {
+  const _StartBubble({required this.color, required this.pulse});
   final Color color;
-  final bool outlined;
+  final AnimationController pulse;
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-      decoration: BoxDecoration(
-        color: outlined ? Colors.transparent : color,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color, width: 1.5),
-        boxShadow: outlined
-            ? null
-            : [
-                BoxShadow(
-                  color: color.withValues(alpha: 0.35),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+    return AnimatedBuilder(
+      animation: pulse,
+      builder: (context, child) => Transform.translate(
+        offset: Offset(0, -3 * Curves.easeInOut.transform(pulse.value)),
+        child: child,
       ),
-      child: Text(
-        label,
-        style: text.labelSmall?.copyWith(
-          color: outlined ? color : Colors.white,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.8,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.35),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Text(
+                'START',
+                style: text.labelSmall?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ),
+            CustomPaint(
+              size: const Size(12, 6),
+              painter: _TrianglePainter(color),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _StarRow extends StatelessWidget {
-  const _StarRow({required this.count, required this.color});
-  final int count;
+class _TrianglePainter extends CustomPainter {
+  const _TrianglePainter(this.color);
   final Color color;
 
   @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width / 2, size.height)
+      ..close();
+    canvas.drawPath(path, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_TrianglePainter old) => old.color != color;
+}
+
+// ─── Next week teaser ─────────────────────────────────────────────────────────
+class _NextWeekTeaser extends StatelessWidget {
+  const _NextWeekTeaser();
+
+  @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < 3; i++)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 1),
-            child: Icon(
-              i < count ? Icons.star_rounded : Icons.star_border_rounded,
-              size: 14,
-              color: i < count
-                  ? const Color(0xFFF59E0B)
-                  : const Color(0xFF6B7280),
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: p.surfaceHigh.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: p.hairline, width: 1),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: p.surface,
+                border: Border.all(color: p.hairline),
+              ),
+              child: Icon(Icons.lock_rounded,
+                  size: 20, color: p.textTertiary),
             ),
-          ),
-      ],
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Week ${PlanData.nextWeekNumber}',
+                    style: text.titleMedium
+                        ?.copyWith(color: p.textSecondary),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    PlanData.nextWeekHint,
+                    style:
+                        text.labelMedium?.copyWith(color: p.textTertiary),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.auto_awesome_rounded,
+                size: 18, color: MockData.mathColor.withValues(alpha: 0.7)),
+          ],
+        ),
+      ),
     );
   }
 }
