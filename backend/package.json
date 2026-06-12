@@ -1,7 +1,7 @@
 {
   "name": "feynman-student-proxy",
   "version": "1.0.0",
-  "description": "Backend proxy that holds the LLM API key and proxies the Feynman 'curious student' prompt to Google Gemini. The Flutter client never sees the key.",
+  "description": "Backend proxy that connects the Feynman 'curious student' prompt to a local Ollama model. The Flutter client only talks to this server.",
   "type": "module",
   "main": "server.js",
   "scripts": {
@@ -12,7 +12,6 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@google/genai": "^1.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2"

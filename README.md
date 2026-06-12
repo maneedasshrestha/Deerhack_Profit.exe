@@ -53,8 +53,8 @@ into the reflection header rather than hard-swapping screens.
 ## Backend proxy contract
 
 **No LLM/API key ships in the app** — it would be extractable from the binary.
-The Flutter client only ever talks to the proxy you run; the proxy holds the key
-and calls the model provider (Google Gemini, free tier).
+The Flutter client only ever talks to the proxy you run; the proxy forwards the
+turn to a local Ollama model.
 
 ### `POST /v1/student/turn`
 
@@ -98,11 +98,11 @@ client parses defensively regardless — it clamps `clarity` to 0–100, tolerat
 missing fields, and falls back to a graceful question if parsing fails, so the
 loop never dead-ends.
 
-### `GET /health` → `{ "ok": true, "model": "gemini-2.0-flash" }`
+### `GET /health` → `{ "ok": true, "provider": "ollama", "model": "qwen2.5:3b" }`
 
-The server (`backend/server.js`) asks Gemini for strict JSON via a
-**`responseSchema`** (`responseMimeType: application/json`) and still
-validates/clamps before responding.
+The server (`backend/server.js`) calls Ollama's `POST /api/chat` endpoint with
+`stream: false` and `format: "json"`, then validates/clamps the parsed
+response before returning it to Flutter.
 
 ---
 
@@ -128,8 +128,9 @@ Two implementations exist today:
   the app is runnable out of the box.
 
 Because the orb, state machine, and UI never reference how a reply is produced,
-a realtime **streaming** backend (Gemini Live / OpenAI Realtime over WebSocket)
-can be dropped in later as a new `StreamingStudentEngine implements
+a realtime **streaming** backend (for example a WebSocket-based Ollama stream
+or OpenAI Realtime) can be dropped in later as a new
+`StreamingStudentEngine implements
 StudentEngine` — no UI changes. The turn-based `Future<StudentTurn>` is the
 lowest common denominator both satisfy. During `studentThinking`, the orb keeps
 a gentle animation so the turn-based pause is never visible as a freeze.
@@ -164,24 +165,21 @@ Mic + speech permissions are declared in `android/.../AndroidManifest.xml` and
 
 ```bash
 cd backend
-cp .env.example .env        # then put your GEMINI_API_KEY in .env
+cp .env.example .env
 npm install
 npm start                   # → http://localhost:8787
 ```
 
-Get a free Gemini key at <https://aistudio.google.com/apikey>.
+Make sure Ollama is running locally at <http://localhost:11434> before starting the backend.
 
 ## Troubleshooting
 
-**Gemini `429 RESOURCE_EXHAUSTED` / "quota of 0".** The key is valid but its
-Google Cloud project has no free-tier quota in its region (you'll see
-`quota_limit_value: "0"`). Fix it on Google's side — the code is correct:
+**Ollama returns `connection refused` or `502`.** The backend cannot reach the local model server.
 
-- Create the key from **Google AI Studio** (<https://aistudio.google.com/apikey>)
-  using the project AI Studio provisions for you — those get free-tier quota.
-  Keys minted in a bare GCP project often have RPM = 0.
-- Or, in Google Cloud, enable the **Generative Language API** and request quota.
-- While quota is unavailable, flip `useMockEngine: true` in
+- Start Ollama and confirm it responds on <http://localhost:11434>.
+- Pull the model with `ollama pull qwen2.5:3b` if it is not already available.
+- If you changed the Ollama port or host, update `OLLAMA_BASE_URL` in `backend/.env`.
+- While the model is unavailable, flip `useMockEngine: true` in
   `lib/features/feynman/application/providers.dart` to run fully offline.
 
 **Speech-to-text does nothing on an Android emulator.** Almost always the

@@ -25,7 +25,7 @@ Future<void> main() async {
     ProviderScope(
       overrides: [
         // Inject the opened repository. Flip useMockEngine to false (and set a
-        // real proxyBaseUrl) in appConfigProvider to hit the live backend.
+        // proxyBaseUrl if needed) in appConfigProvider to hit the live backend.
         sessionRepositoryProvider.overrideWithValue(repository),
       ],
       child: const FeynmanApp(),

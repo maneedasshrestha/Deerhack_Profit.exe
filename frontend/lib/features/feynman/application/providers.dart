@@ -31,15 +31,16 @@ final appConfigProvider = Provider<AppConfig>(
     // Android emulator reaches the host machine at 10.0.2.2.
     // iOS simulator / desktop: use http://localhost:8787.
     proxyBaseUrl: 'http://10.0.2.2:8787',
-    // Using the Gemini-backed proxy. Set to true to run fully offline against
-    // the heuristic MockStudentEngine (no backend needed).
+    // Using the local Ollama-backed proxy. Set to true to run fully offline
+    // against the heuristic MockStudentEngine (no backend needed).
     useMockEngine: false,
   ),
 );
 
 /// Provided via override in `main()` after Hive is open.
 final sessionRepositoryProvider = Provider<SessionRepository>(
-  (ref) => throw UnimplementedError('sessionRepositoryProvider must be overridden'),
+  (ref) =>
+      throw UnimplementedError('sessionRepositoryProvider must be overridden'),
 );
 
 final studentEngineProvider = Provider<StudentEngine>((ref) {
@@ -57,13 +58,13 @@ final voiceServiceProvider = Provider<VoiceService>((ref) => VoiceService());
 /// taught. autoDispose tears down STT/TTS when the live screen is popped.
 final feynmanControllerProvider = StateNotifierProvider.autoDispose
     .family<FeynmanController, FeynmanState, SessionArgs>((ref, args) {
-  final controller = FeynmanController(
-    args: args,
-    engine: ref.watch(studentEngineProvider),
-    speech: ref.watch(speechServiceProvider),
-    voice: ref.watch(voiceServiceProvider),
-    repository: ref.watch(sessionRepositoryProvider),
-  );
-  ref.onDispose(controller.disposeServices);
-  return controller;
-});
+      final controller = FeynmanController(
+        args: args,
+        engine: ref.watch(studentEngineProvider),
+        speech: ref.watch(speechServiceProvider),
+        voice: ref.watch(voiceServiceProvider),
+        repository: ref.watch(sessionRepositoryProvider),
+      );
+      ref.onDispose(controller.disposeServices);
+      return controller;
+    });
