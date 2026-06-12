@@ -223,64 +223,319 @@ class _WeekPath extends StatelessWidget {
     Navigator.of(context, rootNavigator: true).push(route);
   }
 
+  // Keep the winding zigzag, but pin the *current* level to dead centre so the
+  // "you are here" button always lands in the middle, whatever day it is.
+  double _dx(List<WeekLevel> levels, int i) =>
+      levels[i].isCurrent ? 0.0 : _dxFor(i);
+
   @override
   Widget build(BuildContext context) {
     final levels = week.levels;
     return Padding(
       padding: const EdgeInsets.only(top: 18),
-      child: Column(
+      child: Stack(
         children: [
-          for (var i = 0; i < levels.length; i++) ...[
-            if (i > 0)
-              _Connector(
-                fromDx: _dxFor(i - 1),
-                toDx: _dxFor(i),
-                done: levels[i - 1].isCompleted,
-              ),
-            StaggeredEntrance(
-              index: i + 2,
-              child: Transform.translate(
-                offset: Offset(_dxFor(i), 0),
-                child: _LevelNode(
-                  level: levels[i],
-                  onTap: () => _open(context, levels[i]),
+          // Soft, slowly breathing orbs drifting behind the path for depth.
+          const Positioned.fill(child: _AmbientOrbs()),
+          Column(
+            children: [
+              for (var i = 0; i < levels.length; i++) ...[
+                if (i > 0)
+                  _Trail(
+                    fromDx: _dx(levels, i - 1),
+                    toDx: _dx(levels, i),
+                    done: levels[i - 1].isCompleted,
+                    // A mascot sits in the gap; it stays greyed out until the
+                    // level just below it is cleared, then springs to colour.
+                    // TODO(art): supply real art via `mascotAsset:` later, e.g.
+                    //   mascotAsset: 'assets/mascots/owl.png'
+                    mascotUnlocked: levels[i].isCompleted,
+                    mascotOnLeft: i.isEven,
+                  ),
+                StaggeredEntrance(
+                  index: i + 2,
+                  child: Transform.translate(
+                    offset: Offset(_dx(levels, i), 0),
+                    child: _LevelNode(
+                      level: levels[i],
+                      onTap: () => _open(context, levels[i]),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          ],
+              ],
+            ],
+          ),
         ],
       ),
     );
   }
 }
 
-// ─── Connector ────────────────────────────────────────────────────────────────
-class _Connector extends StatelessWidget {
-  const _Connector({
+// ─── Trail (connector + a mascot tucked in the gap) ───────────────────────────
+class _Trail extends StatelessWidget {
+  const _Trail({
     required this.fromDx,
     required this.toDx,
     required this.done,
+    required this.mascotUnlocked,
+    required this.mascotOnLeft,
+    // ignore: unused_element_parameter
+    this.mascotAsset,
   });
 
   final double fromDx, toDx;
   final bool done;
+  final bool mascotUnlocked;
+  final bool mascotOnLeft;
+
+  /// Asset path for the gap's mascot art, wired straight through to
+  /// [_MascotSlot]. Left null for now (a placeholder shows); set it later, e.g.
+  /// `mascotAsset: 'assets/mascots/owl.png'`, with no other changes needed.
+  final String? mascotAsset;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     return SizedBox(
       width: double.infinity,
-      height: 34,
-      child: CustomPaint(
-        painter: _ConnectorPainter(
-          fromDx: fromDx,
-          toDx: toDx,
-          color: done ? p.accent : p.accent.withValues(alpha: 0.18),
-          dashed: !done,
-        ),
+      height: 62,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CustomPaint(
+            size: Size.infinite,
+            painter: _ConnectorPainter(
+              fromDx: fromDx,
+              toDx: toDx,
+              color: done ? p.accent : p.accent.withValues(alpha: 0.18),
+              dashed: !done,
+            ),
+          ),
+          Align(
+            alignment: mascotOnLeft
+                ? const Alignment(-0.66, 0)
+                : const Alignment(0.66, 0),
+            child: _MascotSlot(unlocked: mascotUnlocked, asset: mascotAsset),
+          ),
+        ],
       ),
     );
   }
+}
+
+/// Placeholder for a future mascot illustration tucked between two levels.
+///
+/// Drop real art in later by passing [asset] (e.g.
+/// `asset: 'assets/mascots/owl.png'`). The grey-while-locked / colour-when-
+/// unlocked treatment lives here, so swapping the image needs no other changes.
+class _MascotSlot extends StatelessWidget {
+  const _MascotSlot({required this.unlocked, this.asset});
+
+  final bool unlocked;
+  final String? asset;
+
+  static const double size = 50;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+
+    final Widget art = asset != null
+        ? Image.asset(asset!, width: size, height: size, fit: BoxFit.contain)
+        : Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: p.surfaceHigh,
+              border: Border.all(color: p.hairline, width: 1.2),
+            ),
+            child: Icon(Icons.pets_rounded,
+                size: size * 0.5, color: p.textTertiary),
+          );
+
+    // A little spring + full colour once unlocked; flat greyscale until then.
+    return AnimatedScale(
+      scale: unlocked ? 1.0 : 0.9,
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOutBack,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 400),
+        opacity: unlocked ? 1.0 : 0.5,
+        child: unlocked
+            ? art
+            : ColorFiltered(
+                colorFilter: const ColorFilter.matrix(_kGreyscale),
+                child: art,
+              ),
+      ),
+    );
+  }
+}
+
+/// Luminance-preserving greyscale matrix for locked mascots.
+const List<double> _kGreyscale = <double>[
+  0.2126, 0.7152, 0.0722, 0, 0, //
+  0.2126, 0.7152, 0.0722, 0, 0, //
+  0.2126, 0.7152, 0.0722, 0, 0, //
+  0, 0, 0, 1, 0, //
+];
+
+/// Two oversized, soft orbs that slowly breathe behind the path — pure ambience
+/// to make the screen feel alive and a touch more dimensional.
+class _AmbientOrbs extends StatefulWidget {
+  const _AmbientOrbs();
+
+  @override
+  State<_AmbientOrbs> createState() => _AmbientOrbsState();
+}
+
+class _AmbientOrbsState extends State<_AmbientOrbs>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(vsync: this, duration: const Duration(seconds: 6))
+      ..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  Widget _orb(double size, Color color) => Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient:
+              RadialGradient(colors: [color, color.withValues(alpha: 0)]),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (context, _) {
+          final t = Curves.easeInOut.transform(_c.value);
+          return Stack(
+            children: [
+              Positioned(
+                top: 30 + 10 * t,
+                left: -50,
+                child: _orb(200 + 24 * t,
+                    p.accent.withValues(alpha: 0.10 * (0.55 + 0.45 * t))),
+              ),
+              Positioned(
+                top: 320 - 14 * t,
+                right: -60,
+                child: _orb(
+                    240 - 20 * t,
+                    const Color(0xFFEC4899)
+                        .withValues(alpha: 0.07 * (0.55 + 0.45 * t))),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ─── Electric ring (the current node's "alive" effect) ────────────────────────
+/// A rotating arc of energy with a glowing spark head and occasional lightning
+/// branches — drawn just outside the current level's node to make it crackle.
+class _ElectricRingPainter extends CustomPainter {
+  const _ElectricRingPainter({required this.progress, required this.color});
+
+  final double progress;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final r = size.width / 2 - 2;
+
+    // Faint, steady base ring.
+    canvas.drawCircle(
+      center,
+      r,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..color = color.withValues(alpha: 0.16),
+    );
+
+    // A bright arc of energy chasing its way around the ring.
+    final rect = Rect.fromCircle(center: center, radius: r);
+    final sweep = SweepGradient(
+      colors: [
+        color.withValues(alpha: 0),
+        color.withValues(alpha: 0),
+        color.withValues(alpha: 0.95),
+        color.withValues(alpha: 0),
+      ],
+      stops: const [0.0, 0.55, 0.82, 1.0],
+      transform: GradientRotation(progress * 2 * math.pi),
+    ).createShader(rect);
+    canvas.drawCircle(
+      center,
+      r,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3.2
+        ..strokeCap = StrokeCap.round
+        ..shader = sweep,
+    );
+
+    // The glowing spark at the head of the arc.
+    final ang = progress * 2 * math.pi;
+    final spark = center + Offset(math.cos(ang), math.sin(ang)) * r;
+    canvas.drawCircle(
+      spark,
+      3.4,
+      Paint()
+        ..color = color
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+    );
+    canvas.drawCircle(spark, 1.7, Paint()..color = Colors.white);
+
+    // Occasional lightning flickers branching off the ring.
+    final flick = math.sin(progress * 2 * math.pi * 5);
+    if (flick > 0.72) {
+      final a = ((flick - 0.72) / 0.28).clamp(0.0, 1.0);
+      final bolt = Paint()
+        ..color = color.withValues(alpha: 0.85 * a)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.6
+        ..strokeCap = StrokeCap.round;
+      _bolt(canvas, center, r, ang + math.pi * 0.5, bolt);
+      _bolt(canvas, center, r, ang - math.pi * 0.6, bolt);
+    }
+  }
+
+  void _bolt(Canvas canvas, Offset center, double r, double angle, Paint paint) {
+    final dir = Offset(math.cos(angle), math.sin(angle));
+    final perp = Offset(-dir.dy, dir.dx);
+    final base = center + dir * r;
+    final path = Path()
+      ..moveTo(base.dx, base.dy)
+      ..relativeLineTo(dir.dx * 5 + perp.dx * 3, dir.dy * 5 + perp.dy * 3)
+      ..relativeLineTo(dir.dx * 5 - perp.dx * 5, dir.dy * 5 - perp.dy * 5)
+      ..relativeLineTo(dir.dx * 5 + perp.dx * 2, dir.dy * 5 + perp.dy * 2);
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(_ElectricRingPainter old) =>
+      old.progress != progress || old.color != color;
 }
 
 class _ConnectorPainter extends CustomPainter {
@@ -354,8 +609,10 @@ class _LevelNode extends StatefulWidget {
 }
 
 class _LevelNodeState extends State<_LevelNode>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final AnimationController _pulse;
+  // Drives the rotating "electric" ring on the current node.
+  late final AnimationController _spin;
 
   @override
   void initState() {
@@ -364,12 +621,20 @@ class _LevelNodeState extends State<_LevelNode>
       vsync: this,
       duration: const Duration(milliseconds: 1600),
     );
-    if (widget.level.isCurrent) _pulse.repeat(reverse: true);
+    _spin = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2600),
+    );
+    if (widget.level.isCurrent) {
+      _pulse.repeat(reverse: true);
+      _spin.repeat();
+    }
   }
 
   @override
   void dispose() {
     _pulse.dispose();
+    _spin.dispose();
     super.dispose();
   }
 
@@ -400,6 +665,7 @@ class _LevelNodeState extends State<_LevelNode>
     final Color bg;
     final Color fg;
     Border? border;
+    Gradient? gradient;
     List<BoxShadow> shadows = const [];
 
     if (level.isLocked) {
@@ -408,33 +674,59 @@ class _LevelNodeState extends State<_LevelNode>
     } else if (level.isCompleted) {
       bg = c;
       fg = Colors.white;
+      // Radial highlight reads as a glossy 3D sphere rather than a flat disc.
+      gradient = RadialGradient(
+        center: const Alignment(-0.4, -0.5),
+        radius: 1.1,
+        colors: [Color.lerp(c, Colors.white, 0.5)!, c],
+      );
       shadows = [
         BoxShadow(
-          color: c.withValues(alpha: 0.35),
-          blurRadius: 14,
-          offset: const Offset(0, 6),
+          color: c.withValues(alpha: 0.45),
+          blurRadius: 18,
+          offset: const Offset(0, 9),
+        ),
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.12),
+          blurRadius: 6,
+          offset: const Offset(0, 3),
         ),
       ];
     } else if (level.isCurrent) {
       bg = p.surface;
       fg = c;
       border = Border.all(color: c, width: 3.5);
+      gradient = RadialGradient(
+        center: const Alignment(-0.35, -0.45),
+        radius: 1.0,
+        colors: [Color.lerp(p.surface, c, 0.16)!, p.surface],
+      );
       shadows = [
         BoxShadow(
-          color: c.withValues(alpha: 0.28),
-          blurRadius: 18,
-          offset: const Offset(0, 6),
+          color: c.withValues(alpha: 0.34),
+          blurRadius: 22,
+          offset: const Offset(0, 8),
+        ),
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.10),
+          blurRadius: 6,
+          offset: const Offset(0, 3),
         ),
       ];
     } else {
       bg = p.surface;
       fg = c;
       border = Border.all(color: c.withValues(alpha: 0.45), width: 2.5);
+      gradient = RadialGradient(
+        center: const Alignment(-0.3, -0.4),
+        radius: 1.0,
+        colors: [Color.lerp(p.surface, c, 0.05)!, p.surface],
+      );
       shadows = [
         BoxShadow(
-          color: const Color(0xFF2A2150).withValues(alpha: 0.08),
-          blurRadius: 10,
-          offset: const Offset(0, 4),
+          color: const Color(0xFF2A2150).withValues(alpha: 0.10),
+          blurRadius: 12,
+          offset: const Offset(0, 5),
         ),
       ];
     }
@@ -462,13 +754,13 @@ class _LevelNodeState extends State<_LevelNode>
                 ),
               ),
             AnimatedBuilder(
-              animation: _pulse,
+              animation: Listenable.merge([_pulse, _spin]),
               builder: (context, child) {
-                final t =
-                    Curves.easeInOut.transform(_pulse.value);
+                final t = Curves.easeInOut.transform(_pulse.value);
                 return Stack(
                   alignment: Alignment.center,
                   children: [
+                    // Pulsing halo.
                     if (level.isCurrent)
                       Container(
                         width: diameter + 14 + 14 * t,
@@ -476,6 +768,15 @@ class _LevelNodeState extends State<_LevelNode>
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: c.withValues(alpha: 0.18 * (1 - t)),
+                        ),
+                      ),
+                    // Crackling electric ring chasing around the node.
+                    if (level.isCurrent)
+                      CustomPaint(
+                        size: Size.square(diameter + 20),
+                        painter: _ElectricRingPainter(
+                          progress: _spin.value,
+                          color: c,
                         ),
                       ),
                     child!,
@@ -487,7 +788,8 @@ class _LevelNodeState extends State<_LevelNode>
                 height: diameter,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: bg,
+                  color: gradient == null ? bg : null,
+                  gradient: gradient,
                   border: border,
                   boxShadow: shadows,
                 ),
