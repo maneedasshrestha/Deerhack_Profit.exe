@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
-import '../core/theme/app_theme.dart';
 import '../features/duel/presentation/screens/duel_screen.dart';
 import '../features/feynman/presentation/screens/concept_setup_screen.dart';
 import '../features/home/presentation/screens/home_screen.dart';
 import '../features/home/presentation/widgets/home_top_bar.dart';
+import 'liquid_glass_nav_bar.dart';
 
 /// Three-tab root shell:
 ///   0 — Learn tab  (weekly Duolingo-style plan)
@@ -52,7 +53,6 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
@@ -64,6 +64,9 @@ class _MainShellState extends State<MainShell> {
         }
       },
       child: Scaffold(
+        // Let content flow behind the floating glass nav so its frosted blur
+        // genuinely samples whatever is scrolling underneath.
+        extendBody: true,
         // Shared top bar above every tab — the account section and the exam
         // countdown stay visible no matter where you are.
         body: SafeArea(
@@ -86,29 +89,16 @@ class _MainShellState extends State<MainShell> {
             ],
           ),
         ),
-        bottomNavigationBar: NavigationBar(
+        bottomNavigationBar: LiquidGlassNavBar(
           selectedIndex: _index,
-          onDestinationSelected: (i) => setState(() => _index = i),
-          backgroundColor: p.surface,
-          surfaceTintColor: Colors.transparent,
-          indicatorColor: p.accentSoft,
-          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          destinations: [
-            NavigationDestination(
-              icon: const Icon(Icons.map_outlined),
-              selectedIcon: Icon(Icons.map_rounded, color: p.accent),
-              label: 'Learn',
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.psychology_outlined),
-              selectedIcon: Icon(Icons.psychology_rounded, color: p.accent),
-              label: 'Coach',
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.bolt_outlined),
-              selectedIcon: Icon(Icons.bolt_rounded, color: p.accent),
-              label: 'Duel',
-            ),
+          onSelected: (i) => setState(() => _index = i),
+          items: const [
+            // Graduation cap — the weekly learning plan.
+            GlassNavItem(icon: LucideIcons.graduationCap, label: 'Learn'),
+            // Mic — the Feynman coach you explain out loud to.
+            GlassNavItem(icon: LucideIcons.mic, label: 'Coach'),
+            // Crossed swords — the head-to-head versus race.
+            GlassNavItem(icon: LucideIcons.swords, label: 'Duel'),
           ],
         ),
       ),

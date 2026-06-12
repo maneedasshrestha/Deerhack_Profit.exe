@@ -36,7 +36,8 @@ class HomeScreen extends StatelessWidget {
           const SliverToBoxAdapter(
             child: _NextWeekTeaser(),
           ),
-          const SliverToBoxAdapter(child: SizedBox(height: 48)),
+          // Clearance for the floating glass nav bar.
+          const SliverToBoxAdapter(child: SizedBox(height: 124)),
         ],
       ),
     );

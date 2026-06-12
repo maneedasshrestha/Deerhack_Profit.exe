@@ -42,7 +42,8 @@ class DuelScreen extends StatelessWidget {
             const SliverToBoxAdapter(child: SectionHeader('Recent')),
             SliverToBoxAdapter(
                 child: StaggeredEntrance(index: 2, child: _RecentList())),
-            const SliverToBoxAdapter(child: SizedBox(height: 48)),
+            // Clearance for the floating glass nav bar.
+            const SliverToBoxAdapter(child: SizedBox(height: 124)),
           ],
         ),
       ),

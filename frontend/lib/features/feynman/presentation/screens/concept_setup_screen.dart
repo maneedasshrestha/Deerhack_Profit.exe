@@ -138,7 +138,8 @@ class _ConceptSetupScreenState extends ConsumerState<ConceptSetupScreen> {
               ),
             ),
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+              // Bottom clearance for the floating glass nav bar.
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 116),
               sliver: SliverList.separated(
                 itemCount: recents.length,
                 separatorBuilder: (_, _) => const SizedBox(height: 10),
