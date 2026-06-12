@@ -1,21 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
-import '../core/theme/app_theme.dart';
 import '../features/duel/presentation/screens/duel_screen.dart';
 import '../features/feynman/presentation/screens/concept_setup_screen.dart';
 import '../features/home/presentation/screens/home_screen.dart';
+import '../features/home/presentation/widgets/home_top_bar.dart';
+import 'liquid_glass_nav_bar.dart';
 
 /// Three-tab root shell:
-///   0 — Feynman "Explain" tab  (already built)
-///   1 — Home / Learn tab       (Duolingo-style learning path)
-///   2 — Duel / Battle tab      (real-time versus lobby)
+///   0 — Learn tab  (weekly Duolingo-style plan)
+///   1 — Coach tab  (Feynman coach)
+///   2 — Duel tab   (real-time versus lobby)
 ///
 /// IndexedStack keeps every tab alive across switches so state (scroll
 /// position, in-progress lesson) is preserved. Each tab owns its own
 /// Navigator so internal pushes stay within the tab and the bottom nav
 /// remains visible.
 class MainShell extends StatefulWidget {
-  const MainShell({super.key, this.initialIndex = 1});
+  const MainShell({super.key, this.initialIndex = 0});
 
   final int initialIndex;
 
@@ -51,7 +53,6 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
@@ -63,37 +64,41 @@ class _MainShellState extends State<MainShell> {
         }
       },
       child: Scaffold(
-        body: IndexedStack(
-          index: _index,
-          children: [
-            _Tab(navigatorKey: _keys[0], child: const ConceptSetupScreen()),
-            _Tab(navigatorKey: _keys[1], child: const HomeScreen()),
-            _Tab(navigatorKey: _keys[2], child: const DuelScreen()),
-          ],
+        // Let content flow behind the floating glass nav so its frosted blur
+        // genuinely samples whatever is scrolling underneath.
+        extendBody: true,
+        // Shared top bar above every tab — the account section and the exam
+        // countdown stay visible no matter where you are.
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              const HomeTopBar(),
+              Expanded(
+                child: IndexedStack(
+                  index: _index,
+                  children: [
+                    _Tab(navigatorKey: _keys[0], child: const HomeScreen()),
+                    _Tab(
+                        navigatorKey: _keys[1],
+                        child: const ConceptSetupScreen()),
+                    _Tab(navigatorKey: _keys[2], child: const DuelScreen()),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
-        bottomNavigationBar: NavigationBar(
+        bottomNavigationBar: LiquidGlassNavBar(
           selectedIndex: _index,
-          onDestinationSelected: (i) => setState(() => _index = i),
-          backgroundColor: p.surface,
-          surfaceTintColor: Colors.transparent,
-          indicatorColor: p.accentSoft,
-          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          destinations: [
-            NavigationDestination(
-              icon: const Icon(Icons.psychology_outlined),
-              selectedIcon: Icon(Icons.psychology_rounded, color: p.accent),
-              label: 'Explain',
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home_rounded, color: p.accent),
-              label: 'Learn',
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.bolt_outlined),
-              selectedIcon: Icon(Icons.bolt_rounded, color: p.accent),
-              label: 'Duel',
-            ),
+          onSelected: (i) => setState(() => _index = i),
+          items: const [
+            // Graduation cap — the weekly learning plan.
+            GlassNavItem(icon: LucideIcons.graduationCap, label: 'Learn'),
+            // Mic — the Feynman coach you explain out loud to.
+            GlassNavItem(icon: LucideIcons.mic, label: 'Coach'),
+            // Crossed swords — the head-to-head versus race.
+            GlassNavItem(icon: LucideIcons.swords, label: 'Duel'),
           ],
         ),
       ),

@@ -142,7 +142,13 @@ class FeynmanController extends StateNotifier<FeynmanState> {
 
   void _finalize(String text) {
     if (_finalizing) return;
+    // Only an active listening session may finalize. Without this guard a
+    // duplicate terminal event (manual stop + recognizer's own final result /
+    // onDone) could re-submit the same utterance after processing began,
+    // double-entering it into the transcript history.
+    if (state.phase is! ListeningPhase) return;
     _finalizing = true;
+    _heard = '';
     final trimmed = text.trim();
     if (trimmed.isEmpty) {
       // Heard nothing — tell the learner rather than silently resetting.

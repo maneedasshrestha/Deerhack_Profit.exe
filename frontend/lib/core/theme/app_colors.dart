@@ -84,22 +84,22 @@ class AppPalette {
     orbGlow: Color(0xFF6D5BE0),
   );
 
-  /// Derived light palette — same accent, inverted neutral ramp.
+  /// The app's primary palette — light, airy, with a confident purple accent.
   static const AppPalette light = AppPalette(
     brightness: Brightness.light,
-    accent: Color(0xFF6D5BE0),
-    accentSoft: Color(0x1F6D5BE0),
-    bg: Color(0xFFF7F7FB),
+    accent: Color(0xFF7C3AED),
+    accentSoft: Color(0x147C3AED),
+    bg: Color(0xFFF9F8FD),
     surface: Color(0xFFFFFFFF),
-    surfaceHigh: Color(0xFFFFFFFF),
-    hairline: Color(0x14000000),
-    textPrimary: Color(0xFF15151B),
-    textSecondary: Color(0xFF55555F),
-    textTertiary: Color(0xFF8C8C97),
-    warning: Color(0xFFB9791A),
-    positive: Color(0xFF1F9E72),
-    recordingDot: Color(0xFFE23B53),
-    orbCore: Color(0xFF8B7CF6),
-    orbGlow: Color(0xFF6D5BE0),
+    surfaceHigh: Color(0xFFF2EFFA),
+    hairline: Color(0x14201A33),
+    textPrimary: Color(0xFF1B1726),
+    textSecondary: Color(0xFF5A5468),
+    textTertiary: Color(0xFF9892A8),
+    warning: Color(0xFFB45309),
+    positive: Color(0xFF059669),
+    recordingDot: Color(0xFFE11D48),
+    orbCore: Color(0xFF9F7AFF),
+    orbGlow: Color(0xFF7C3AED),
   );
 }
