@@ -1,240 +1,303 @@
-# Feynman — "Teach a Student"
+# ACELY
 
-Practice the Feynman technique: pick a concept and explain it out loud as if
-teaching a curious ~12-year-old. An AI "student" listens, reacts, and asks the
-naive follow-up questions that expose the gaps in your understanding. Ending a
-session leaves behind a reviewable artifact — the full transcript, every flagged
-gap, and your clarity trend — because **reflection is the payoff of the
-technique**.
+**A Duolingo for entrance-exam prep — adaptive, gamified, and built to beat burnout.**
+
+ACELY turns competitive-exam preparation (starting with Nepal's **IOE engineering
+entrance**) into a structured daily habit. Instead of handing aspirants a static
+syllabus, it generates a **weekly study plan calibrated to each learner's current
+level**, drives short daily MCQ practice, reinforces memory with spaced-repetition
+flashcards, validates *real* understanding through a **Feynman coach**, and keeps
+motivation high with streaks, stats, and live **duel battles**.
+
+> The core bet: aspirants don't fail because the material is unavailable — they
+> fail because they **burn out, lose consistency, and forget what they studied**.
+> ACELY attacks those three failure modes directly.
+
+---
+
+## The problem
+
+Competitive-exam aspirants in Nepal hit three recurring walls:
+
+1. **Burnout & inconsistency** — long, unstructured marathons lead to dropped routines.
+2. **Low motivation** — without feedback loops or accountability, daily study feels thankless.
+3. **Poor retention** — material studied weeks ago is gone by exam day.
+
+Most prep resources are content dumps (PDFs, video playlists, question banks). They
+optimize for *coverage*, not for *habit, retention, or genuine understanding*.
+
+| Problem | ACELY's mechanism |
+|---|---|
+| Burnout & inconsistency | Bite-sized daily sessions + streaks + winnable daily goals |
+| Low motivation | XP, levels, leagues + social accountability via duels & leaderboards |
+| Poor retention | Spaced-repetition flashcards triggered after a chapter is studied |
+| Shallow understanding | Feynman coach — you explain a topic, it grades your comprehension |
+| One-size-fits-all plans | An adaptive weekly plan engine driven by continuous assessment |
+
+**Design principle:** keep daily load small and winnable, recalibrate weekly, and
+make progress *feel* visible. **Consistency beats intensity.**
+
+---
+
+## What's in the app
+
+The Flutter client is organised around three tabs plus a profile, all sharing one
+light, purple-accented design language. A persistent top bar keeps the **exam
+countdown** and **account** reachable from anywhere.
+
+### 📚 Learn — the weekly plan
+A Duolingo-style path for the current week, generated from the onboarding inputs.
+Each week is a sequence of levels:
+
+- **Daily MCQ levels** — mixed questions across English, Physics, Chemistry, and Maths,
+  with **guided, Socratic feedback**: a wrong first attempt surfaces a *hint* that
+  nudges you toward the answer rather than handing it over; only a second miss reveals
+  the answer along with *why each distractor is wrong*. Questions can be **starred**
+  for later revision.
+- **Bonus flashcard level** — a Tinder-style true/false swipe deck for formulas and
+  facts, on a spaced-repetition schedule.
+- **Weekend mock test** — timed, exam-conditions, no feedback until submission.
+  Tracks per-question time, surfaces where you stalled, and **its result drafts next
+  week's plan** to reinforce the weak points it exposed.
+
+### 🧠 Coach — the Feynman technique
+Pick a topic and explain it out loud (or by text). The coach listens, probes the
+vague spots, and returns **constructive criticism on exactly where your explanation
+fell short** — every unexplained term flagged, with a clarity trend across attempts.
+A clean session history lets you re-explain and watch the score climb.
+*(This is the one feature wired to a live LLM today — see [Architecture](#architecture).)*
+
+### ⚔️ Duel — race a friend
+Real-time, head-to-head rapid-fire MCQ: same questions, fastest correct answer wins.
+A live scoreboard and dual progress tracks make it a fun accountability layer.
+
+### 👤 Profile — your plan at a glance
+- **Syllabus coverage** per subject with completion rings/bars.
+- **Your plan** as a three-step timeline: last mock → this week's targeted weak points
+  → the Sunday retest that drafts the next week.
+- **Starred questions**, collapsed until you expand them, each revealing its answer on tap.
+
+---
+
+## End-to-end user flow
 
 ```
-m:\Projects\deer_hack_profit_exe
-├── backend/    Node/Express proxy that holds the LLM key (never the app)
-└── frontend/   Flutter app (the feature module)
+Register
+   │
+   ▼
+Onboarding  (exam · days left · daily time · target marks · quick self-assessment)
+   │
+   ▼
+Week 1 plan generated (provisional)
+   │
+   ▼
+┌──────────── Daily loop (through the week) ───────────────────┐
+│  MCQ practice  →  Flashcard review (spaced)  →  Feynman check │
+│  (star questions · earn XP · keep streak · optional duels)    │
+└───────────────────────────────────────────────────────────────┘
+   │
+   ▼
+Weekend mock test (mirrors the real exam)
+   │
+   ▼
+Performance analysis → next week's plan proposed
+   │
+   ▼
+User reviews & edits the plan (select/deselect focus chapters)
+   │
+   └──────────────► back to the daily loop (until D-day)
 ```
 
 ---
 
-## The loop (a state machine)
+## The adaptive engine (the differentiator)
 
-```
-idle → listening → transcribing → studentThinking → studentSpeaking → idle
-                                                          ↑__________repeat__________|
-        (end session) → reflection
-```
+A simple, **explainable rules-based engine** — no ML needed on day one.
 
-Modelled explicitly as a sealed `FeynmanPhase` hierarchy
-(`lib/features/feynman/domain/models/feynman_phase.dart`) owned by a single
-`FeynmanController` (a Riverpod `StateNotifier`). **The UI is a pure function of
-the current state.** Exactly one of speech-to-text / text-to-speech is active at
-a time — the controller stops the recognizer before TTS plays and only reopens
-the mic once playback finishes, which kills the mic→speaker→mic feedback loop.
+**Per-chapter mastery score (0–100)** is updated from:
+- MCQ accuracy (weighted by recency)
+- Weekend-test performance (highest weight — the cleanest signal)
+- Feynman comprehension score
+- Spaced-repetition recall success
 
-Two screens:
+**Each week's plan is generated by:**
+1. Computing the time budget = `days_left × daily_minutes`.
+2. Ranking chapters by `priority = (1 − mastery) × syllabus_weight × exam_proximity`.
+3. Allocating the week's sessions proportionally to priority.
+4. Reserving a slice for maintenance review of mastered chapters.
+5. Presenting the plan → applying user edits → locking it for the week.
 
-- **Live voice mode** (`live_voice_screen.dart`) — a full-screen immersive
-  experience built around an amplitude-reactive **orb** with three visually
-  distinct states (idle / listening / speaking, plus a gentle thinking pulse so
-  the LLM pause never reads as frozen). Custom-painter driven
-  (`widgets/orb/`). Minimal overlay: a status pill + elapsed timer, a single
-  line of live caption, and a bottom bar (gaps counter → transcript, transcript
-  icon, type-instead, end-session).
-- **Reflection view** (`reflection_screen.dart`) — chat-style transcript with
-  inline **wavy jargon underlines** (paired with a warning icon, so colour is
-  never the sole signal), a large clarity score with a trend sparkline, the
-  `1 Explain → 2 Gaps → 3 Simplify` indicator, a `v1 → v2 → v3` attempts strip,
-  and **teach it again** (which versions the next attempt).
-
-A shared-element **Hero** transition (`tag: 'feynman-orb'`) collapses the orb
-into the reflection header rather than hard-swapping screens.
+As `days_left` shrinks, the `exam_proximity` factor shifts weight toward high-yield
+chapters and away from low-mastery-but-low-weight topics (triage).
 
 ---
 
-## Backend proxy contract
+## Architecture
 
-**No LLM/API key ships in the app** — it would be extractable from the binary.
-The Flutter client only ever talks to the proxy you run; the proxy holds the key
-and calls the model provider (Google Gemini, free tier).
+Three tiers. For the hackathon everything collapses into **one mobile app + one
+backend + one database** — a modular monolith, *not* microservices.
 
-### `POST /v1/student/turn`
-
-Request:
-
-```jsonc
-{
-  "concept": "photosynthesis",
-  "explanation": "Plants take in light and turn it into food using chlorophyll…",
-  "history": [
-    { "role": "user",    "text": "earlier explanation…" },
-    { "role": "student", "text": "earlier question…" }
-  ]
-}
+```
+┌─────────────────────────────┐     REST (plans, practice, scores, profile)
+│  Flutter app  (this repo)   │ ───────────────────────────────────────────┐
+│  Riverpod · light/purple UI │     WebSocket (duels only)                  │
+└─────────────────────────────┘ ────────────────────────────────┐          │
+                                                                 ▼          ▼
+                                                  ┌──────────────────────────────┐
+                                                  │  Node.js monolith (modules)   │
+                                                  │  auth · plan engine · practice│
+                                                  │  spaced-rep · gamification ·  │
+                                                  │  Feynman grader · duel engine │
+                                                  │  · notifications              │
+                                                  └──────────────────────────────┘
+                                                       │        │         │
+                                                  ┌────▼──┐ ┌───▼───┐ ┌────▼────┐
+                                                  │Postgres│ │ Redis │ │ LLM API │
+                                                  └────────┘ └───────┘ └─────────┘
+                                                                       (+ FCM push)
 ```
 
-- `concept` (string, required) — what's being taught.
-- `explanation` (string, required, non-empty) — the latest spoken turn.
-- `history` (array, optional) — prior turns for context. `role` is `"user"`
-  (the learner) or `"student"` (the AI).
+### Current implementation state (POC)
 
-Response `200`:
+| Area | Today in this repo | Production target |
+|---|---|---|
+| **Frontend** | Full Flutter app, all four sections built, polished animations. Data is **mocked** in `lib/features/home/domain/` so screens are demo-able without a backend. | Wire each screen to the REST API; offline-first local store; design system. |
+| **Feynman coach** | **Live** — `backend/` is a Node + Express proxy that holds the LLM key and calls **Google Gemini** for the "curious student" turn. | Curated per-topic rubrics, guardrails, quality monitoring, optional speech-to-text. |
+| **Plan engine / practice / mock test** | Modelled with mock data on the client (weekly plan, questions, mastery, weak points). | Rules-based engine + `attempt_log` + mastery recompute, served from Postgres. |
+| **Duel** | Mock matchmaking + a **scripted opponent** so the live race is demo-able end-to-end. | Socket.IO + in-memory state (hackathon) → Redis-backed, server-authoritative, anti-cheat (production). |
+| **Auth / gamification / notifications** | Not yet built; streak/XP/countdown shown from mock data. | Firebase Auth/JWT, server-side counters, `node-cron` + FCM. |
 
-```json
-{
-  "reaction": "Oh okay, that kind of makes sense...",
-  "question": "But what actually is 'chlorophyll' — what does it do?",
-  "clarity": 72,
-  "jargon": ["chlorophyll", "thylakoid membrane"]
-}
-```
+### Hackathon vs. production at a glance
 
-- `reaction` (string) — a short, human reaction spoken before the question.
-- `question` (string) — exactly one naive follow-up.
-- `clarity` (integer 0–100) — how clearly the learner explained.
-- `jargon` (string[]) — terms used without explanation, copied verbatim so the
-  client can underline them in the learner's own words.
+| Concern | Hackathon | Production |
+|---|---|---|
+| Backend shape | Single Node.js monolith (modules = folders) | Services split by load profile (duel + LLM scale independently) |
+| Auth | Firebase Auth or simple JWT | Refresh rotation, OAuth, verification, revocation |
+| Plan engine | Rules-based functions | Versioned service, eventually ML-assisted |
+| Real-time duels | In-memory state + Socket.IO | Redis-backed, server-authoritative, anti-cheat |
+| Leaderboards | DB query / in-memory | Redis sorted sets |
+| Feynman grading | Direct LLM call + rubric prompt | Curated rubrics, guardrails, drift monitoring |
+| Notifications | `node-cron` + FCM | BullMQ jobs, send-time optimization |
+| Data | One Postgres, seeded deeply | Replicas, indexing, backups, partitioning |
 
-Errors: `400` (bad request), `422` (model refusal), `5xx` (upstream error). The
-client parses defensively regardless — it clamps `clarity` to 0–100, tolerates
-missing fields, and falls back to a graceful question if parsing fails, so the
-loop never dead-ends.
+> **Why the modular monolith?** A single Node process with internal modules demos
+> identically to a "real" distributed system and is buildable in a hackathon window.
+> Each module below is just a folder of routes + service functions, not a separate server.
 
-### `GET /health` → `{ "ok": true, "model": "gemini-2.0-flash" }`
+### Backend modules (target)
 
-The server (`backend/server.js`) asks Gemini for strict JSON via a
-**`responseSchema`** (`responseMimeType: application/json`) and still
-validates/clamps before responding.
+- **Auth** — registration, login, endpoint protection (Firebase Auth or JWT).
+- **Plan engine** *(differentiator)* — generates/regenerates weekly plans; applies user edits.
+- **Practice & tests** — serves MCQ sets & the weekend test; logs every attempt; recomputes mastery.
+- **Spaced repetition** — SM-2 / Leitner scheduling (`next_review_at`, `interval`, `ease`).
+- **Gamification** — XP, levels, streaks (with **streak-freeze**), D-day countdown, leaderboards.
+- **Feynman grader** *(live today)* — rubric-based LLM grading; key held server-side.
+- **Duel engine** — Socket.IO namespace; in-memory duel state for the hackathon.
+- **Notifications** — `node-cron` daily job → FCM. Encouraging, never guilt-tripping.
 
 ---
 
-## The `StudentEngine` seam (streaming upgrade path)
+## High-level data model
 
-The UI and state machine depend only on:
-
-```dart
-abstract interface class StudentEngine {
-  Future<StudentTurn> respond(StudentRequest request);
-}
-```
-
-(`lib/features/feynman/domain/student_engine.dart`)
-
-Two implementations exist today:
-
-- `TurnBasedStudentEngine` — POSTs to the proxy contract above (the default
-  production path).
-- `MockStudentEngine` — offline/dev engine that runs the **entire loop with no
-  backend**; it heuristically pulls "jargon" from your own words and scores
-  clarity, so the reflection view has real-looking data. This is the default so
-  the app is runnable out of the box.
-
-Because the orb, state machine, and UI never reference how a reply is produced,
-a realtime **streaming** backend (Gemini Live / OpenAI Realtime over WebSocket)
-can be dropped in later as a new `StreamingStudentEngine implements
-StudentEngine` — no UI changes. The turn-based `Future<StudentTurn>` is the
-lowest common denominator both satisfy. During `studentThinking`, the orb keeps
-a gentle animation so the turn-based pause is never visible as a freeze.
+- **User** — id, name, exam_type, exam_date, daily_minutes, target_marks, xp, level, streak_count, streak_freeze
+- **Subject / Chapter** — id, name, syllabus_weight
+- **Question** — id, chapter_id, type, body, options, correct_answer, explanation, difficulty
+- **WeeklyPlan / PlanItem** — week_number, status; chapter_id, allocated/completed sessions
+- **AttemptLog** — user_id, question_id, correct, time_taken, timestamp
+- **MasteryScore** — user_id, chapter_id, score, last_updated
+- **Flashcard / ReviewSchedule** — card_id, user_id, next_review_at, interval, ease
+- **FeynmanAttempt** — user_id, topic_id, transcript, score, missed_points
+- **SavedQuestion**, **Duel**, **Achievement / UserAchievement**
 
 ---
 
-## Setup
+## Repo structure
 
-### Frontend
+```
+Deerhack_Profit.exe/
+├── backend/    Node + Express proxy that holds the LLM key and calls Gemini
+│               (currently serves the Feynman coach; other modules to follow)
+└── frontend/   Flutter app
+    └── lib/
+        ├── app.dart                     MaterialApp (light theme, ACELY)
+        ├── shell/main_shell.dart        3-tab shell + shared top bar
+        ├── core/
+        │   ├── theme/                   palette, typography, theme tokens
+        │   └── widgets/ui_kit.dart      shared cards, buttons, rings, gestures
+        └── features/
+            ├── home/                    Learn path, lessons, flashcards,
+            │                            mock test, profile, plan/mock data
+            ├── feynman/                 Coach: live voice loop + reflection
+            └── duel/                    Duel lobby + live race
+```
+
+---
+
+## Running it
+
+### Frontend (Flutter)
 
 ```bash
 cd frontend
 flutter pub get
-flutter run
+flutter run            # pick a device/emulator
 ```
 
-Runs against the **mock engine** by default — full loop, no backend needed.
-To use the real proxy, edit `appConfigProvider` in
-`lib/features/feynman/application/providers.dart`:
+The app runs standalone on mock data — every screen is explorable without the backend.
+Only the **Coach** tab needs the backend (and an LLM key) to grade real explanations.
 
-```dart
-const AppConfig(
-  proxyBaseUrl: 'http://10.0.2.2:8787', // Android emulator; localhost on iOS/desktop
-  useMockEngine: false,
-);
-```
-
-Mic + speech permissions are declared in `android/.../AndroidManifest.xml` and
-`ios/Runner/Info.plist`.
-
-### Backend
+### Backend (Node — powers the Feynman coach)
 
 ```bash
 cd backend
-cp .env.example .env        # then put your GEMINI_API_KEY in .env
 npm install
-npm start                   # → http://localhost:8787
+cp .env.example .env   # then set GEMINI_API_KEY
+npm run dev            # http://localhost:8787
 ```
 
-Get a free Gemini key at <https://aistudio.google.com/apikey>.
+The server exposes:
 
-## Troubleshooting
+```
+POST /v1/student/turn
+  body: { concept: string, explanation: string, history: Turn[] }
+  200 : { reaction, question, clarity (0-100 int), jargon: string[] }
+```
 
-**Gemini `429 RESOURCE_EXHAUSTED` / "quota of 0".** The key is valid but its
-Google Cloud project has no free-tier quota in its region (you'll see
-`quota_limit_value: "0"`). Fix it on Google's side — the code is correct:
-
-- Create the key from **Google AI Studio** (<https://aistudio.google.com/apikey>)
-  using the project AI Studio provisions for you — those get free-tier quota.
-  Keys minted in a bare GCP project often have RPM = 0.
-- Or, in Google Cloud, enable the **Generative Language API** and request quota.
-- While quota is unavailable, flip `useMockEngine: true` in
-  `lib/features/feynman/application/providers.dart` to run fully offline.
-
-**Speech-to-text does nothing on an Android emulator.** Almost always the
-emulator, not the app:
-
-- Use an emulator image **with Google Play** (the AOSP images have no speech
-  recognizer). Install/enable "Speech Services by Google".
-- Emulator **…** (Extended controls) → **Microphone** → enable
-  *"Virtual microphone uses host audio input"*, and grant your OS mic permission
-  to the emulator.
-- Grant the app the microphone permission when prompted.
-- **A physical device is the reliable path** for STT/TTS — emulator audio is
-  flaky. The app gives explicit "I didn't hear anything" feedback and a
-  keyboard fallback when nothing is captured, so you can still drive the full
-  loop by typing.
+The LLM key lives **only** on the server — it never ships inside the Flutter binary,
+where it would be trivially extractable.
 
 ---
 
-## Package choices (one-line justifications)
+## Build order (hackathon)
 
-| Package          | Why |
-|------------------|-----|
-| `flutter_riverpod` | State management required by the brief; the loop is a `StateNotifier` exposing immutable state. |
-| `speech_to_text`   | STT with a sound-level callback — used to drive the orb's listening amplitude. |
-| `flutter_tts`      | TTS configured to a higher pitch / slower rate so the student reads as a character. |
-| `hive` + `hive_flutter` | Local persistence: pure-Dart, **no native build step or codegen** (we store JSON), ideal for our small, structured sessions + versioned attempts. Chosen over Isar/Drift for that simplicity. |
-| `http`             | Minimal client for the proxy call. |
-| `google_fonts`     | Inter variable font for the typographic hierarchy. |
+1. **Skeleton** — Flutter shell + Node backend + Postgres + auth, wired end-to-end.
+2. **Core loop** — onboarding → plan engine → daily MCQ practice → attempt logging.
+3. **Recalibration** — weekend test → mastery recompute → next week's plan with user edits *(the differentiator)*.
+4. **Gamification quick wins** — streaks + XP + D-day countdown.
+5. **One showcase feature** — the Feynman coach (best story-per-effort).
+6. **Stretch** — duel battles (riskiest live demo; build last).
+
+> A working *onboarding → adaptive plan → practice → recalibrated plan* loop plus a
+> live Feynman demo beats ten half-finished features. **Depth on the core, not breadth.**
 
 ---
 
-## Accessibility & robustness
+## Anti-burnout, on purpose
 
-- Every control has a semantic label; the live caption is a live region; the
-  jargon underline is paired with an icon (colour is never the only signal).
-- **Reduce-motion** is honoured — the orb holds a calm steady state and rings
-  stop looping when the OS setting is on.
-- Graceful handling of: denied mic permission (offer typing), no speech
-  detected (gentle return to idle), network failure (recoverable error + retry,
-  transcript preserved), and malformed model output (defensive parse + fallback
-  question).
-- Both **light and dark** themes (dark designed first), switchable at runtime.
+ACELY deliberately avoids the Duolingo mechanics that *increase* stress:
 
-## Architecture
+- **No hearts/lives** that lock you out after mistakes — punishing wrong answers
+  discourages the exact practice we want.
+- **Encouraging nudges, not shame** — notifications are framed as support.
+- **Streak-freeze from day one** — removes the all-or-nothing pressure that makes
+  people rage-quit after a single missed day.
 
-```
-frontend/lib/
-├── app.dart                      MaterialApp + theme mode
-├── main.dart                     Hive init + Riverpod overrides
-├── core/                         theme, motion, haptics (cross-cutting)
-└── features/feynman/
-    ├── domain/                   models (sealed phase, state, session) + engine interface
-    ├── data/                     engine impls (turn-based + mock) + Hive repository
-    ├── application/              controller (state machine), services (STT/TTS), providers
-    └── presentation/             screens + widgets (orb, transcript, sparkline, …)
-```
+---
+
+## Roadmap
+
+- ML-based plan optimization (replacing the rules engine once usage data exists)
+- Voice-based Feynman coach with pronunciation-tolerant transcription
+- Clans / study groups and group duels
+- Localized content and Nepali-language support
+- A predictive "exam-readiness score" projecting expected vs. target marks
