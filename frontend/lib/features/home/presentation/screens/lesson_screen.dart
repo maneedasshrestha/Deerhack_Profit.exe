@@ -201,22 +201,30 @@ class _LessonScreenState extends ConsumerState<LessonScreen> {
                         onShowHint: _showHint,
                       ),
                       const SizedBox(height: 18),
-                      for (var i = 0; i < _q.options.length; i++) ...[
-                        _OptionTile(
-                          label: _q.options[i],
-                          index: i,
-                          selected: _selected == i,
-                          eliminated: _eliminated.contains(i),
-                          revealedCorrect: (_phase == _Phase.correct ||
-                                  _phase == _Phase.revealed) &&
-                              i == _q.correctIndex,
-                          revealedWrong: _phase == _Phase.revealed &&
-                              _eliminated.contains(i),
-                          enabled: _phase == _Phase.answering,
-                          onTap: () => setState(() => _selected = i),
-                        ),
-                        const SizedBox(height: 10),
-                      ],
+                      for (var i = 0; i < _q.options.length; i++)
+                        if (_q.options[i].isNotEmpty) ...[
+                          _OptionTile(
+                            label: _q.options[i],
+                            index: i,
+                            selected: _selected == i,
+                            eliminated: _eliminated.contains(i),
+                            revealedCorrect: (_phase == _Phase.correct ||
+                                    _phase == _Phase.revealed) &&
+                                i == _q.correctIndex,
+                            revealedWrong: _phase == _Phase.revealed &&
+                                _eliminated.contains(i),
+                            enabled: _phase == _Phase.answering,
+                            // The reason that belongs to this option, shown
+                            // inline once the answer is revealed.
+                            note: i == _q.correctIndex
+                                ? _q.explanation
+                                : (i < _q.whyWrong.length
+                                    ? _q.whyWrong[i]
+                                    : null),
+                            onTap: () => setState(() => _selected = i),
+                          ),
+                          const SizedBox(height: 10),
+                        ],
                     ],
                   ),
                 ),
@@ -496,12 +504,17 @@ class _OptionTile extends StatelessWidget {
     required this.revealedWrong,
     required this.enabled,
     required this.onTap,
+    this.note,
   });
 
   final String label;
   final int index;
   final bool selected, eliminated, revealedCorrect, revealedWrong, enabled;
   final VoidCallback onTap;
+
+  /// The reason this option is right/wrong, revealed inline beneath it once the
+  /// answer is shown. Null or empty → nothing extra.
+  final String? note;
 
   @override
   Widget build(BuildContext context) {
@@ -549,8 +562,11 @@ class _OptionTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: borderColor, width: borderWidth),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Row(
+              children: [
             Container(
               width: 28,
               height: 28,
@@ -591,6 +607,21 @@ class _OptionTile extends StatelessWidget {
               ),
             ),
             if (trailing != null) ...[const SizedBox(width: 8), trailing],
+              ],
+            ),
+            if ((revealedCorrect || revealedWrong) &&
+                note != null &&
+                note!.trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.only(left: 40),
+                child: Text(
+                  note!,
+                  style: text.bodySmall?.copyWith(
+                      color: p.textSecondary, height: 1.4),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -599,7 +630,7 @@ class _OptionTile extends StatelessWidget {
 }
 
 // ─── Feedback panel ───────────────────────────────────────────────────────────
-class _FeedbackPanel extends StatelessWidget {
+class _FeedbackPanel extends StatefulWidget {
   const _FeedbackPanel({
     required this.phase,
     required this.question,
@@ -615,9 +646,20 @@ class _FeedbackPanel extends StatelessWidget {
   final bool isLast;
 
   @override
+  State<_FeedbackPanel> createState() => _FeedbackPanelState();
+}
+
+class _FeedbackPanelState extends State<_FeedbackPanel> {
+  // The tip is tucked away by default — only shown when explicitly toggled, so
+  // the reveal stays uncluttered.
+  bool _showTip = false;
+
+  @override
   Widget build(BuildContext context) {
     final p = context.palette;
     final text = Theme.of(context).textTheme;
+    final phase = widget.phase;
+    final question = widget.question;
 
     // The hint itself lives under the question — this sheet only nudges the
     // learner back up to it.
@@ -635,7 +677,7 @@ class _FeedbackPanel extends StatelessWidget {
               subtitle: 'Take the hint under the question, then try again.',
             ),
             const SizedBox(height: 16),
-            AppButton(label: 'Try again', height: 50, onTap: onRetry),
+            AppButton(label: 'Try again', height: 50, onTap: widget.onRetry),
           ],
         ),
       );
@@ -646,12 +688,7 @@ class _FeedbackPanel extends StatelessWidget {
     const red = Color(0xFFE11D48);
     // Clear right/wrong signal: green when correct, red when not.
     final color = correct ? green : red;
-
-    final wrongNotes = <MapEntry<String, String>>[
-      for (var i = 0; i < question.whyWrong.length; i++)
-        if (i != question.correctIndex && question.whyWrong[i].isNotEmpty)
-          MapEntry(String.fromCharCode(65 + i), question.whyWrong[i]),
-    ];
+    final tip = question.tip;
 
     return _Sheet(
       child: Column(
@@ -663,58 +700,71 @@ class _FeedbackPanel extends StatelessWidget {
             color: color,
             icon: correct ? Icons.check_rounded : Icons.close_rounded,
             title: correct ? 'Correct' : 'Incorrect',
-            subtitle: correct ? 'Nice work.' : 'Here\'s the reasoning.',
+            subtitle: correct
+                ? 'Nice work.'
+                : 'See the reasoning under each option.',
           ),
-          const SizedBox(height: 14),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 220),
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          // The optional memory aid, revealed only on demand.
+          if (tip != null && tip.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Pressable(
+              onTap: () => setState(() => _showTip = !_showTip),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  // The explanation, set in a calm insight block.
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: p.surfaceHigh,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: p.hairline),
-                    ),
-                    child: Text(
-                      question.explanation,
-                      style: text.bodyMedium
-                          ?.copyWith(color: p.textPrimary, height: 1.5),
+                  Icon(
+                    _showTip
+                        ? Icons.lightbulb_rounded
+                        : Icons.lightbulb_outline_rounded,
+                    size: 16,
+                    color: p.accent,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    _showTip ? 'Hide tip' : 'Show tip',
+                    style: text.labelMedium?.copyWith(
+                      color: p.accent,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                  if (wrongNotes.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    Text(
-                      'WHY THE OTHERS MISS',
-                      style: text.labelSmall?.copyWith(
-                        color: p.textTertiary,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.0,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    for (final n in wrongNotes)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: _WrongNote(letter: n.key, note: n.value),
-                      ),
-                  ],
+                  Icon(
+                    _showTip
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    size: 18,
+                    color: p.accent,
+                  ),
                 ],
               ),
             ),
-          ),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.topCenter,
+              child: _showTip
+                  ? Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(top: 10),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: p.accentSoft,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Text(
+                        tip,
+                        style: text.bodyMedium
+                            ?.copyWith(color: p.textPrimary, height: 1.5),
+                      ),
+                    )
+                  : const SizedBox(width: double.infinity),
+            ),
+          ],
           const SizedBox(height: 16),
           AppButton(
-            label: isLast ? 'See results' : 'Continue',
+            label: widget.isLast ? 'See results' : 'Continue',
             color: color,
             height: 52,
-            onTap: onNext,
+            onTap: widget.onNext,
           ),
         ],
       ),
@@ -806,51 +856,6 @@ class _Sheet extends StatelessWidget {
           child,
         ],
       ),
-    );
-  }
-}
-
-/// One "why this option misses" row: a letter chip + the reason.
-class _WrongNote extends StatelessWidget {
-  const _WrongNote({required this.letter, required this.note});
-
-  final String letter;
-  final String note;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final text = Theme.of(context).textTheme;
-    const red = Color(0xFFE11D48);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 22,
-          height: 22,
-          decoration: BoxDecoration(
-            color: red.withValues(alpha: 0.10),
-            shape: BoxShape.circle,
-          ),
-          child: Center(
-            child: Text(
-              letter,
-              style: text.labelSmall?.copyWith(
-                color: red.withValues(alpha: 0.9),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            note,
-            style:
-                text.bodyMedium?.copyWith(color: p.textSecondary, height: 1.4),
-          ),
-        ),
-      ],
     );
   }
 }

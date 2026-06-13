@@ -6,8 +6,6 @@ import '../../../../core/widgets/ui_kit.dart';
 import '../../../onboarding/application/auth_providers.dart';
 import '../../../onboarding/application/onboarding_providers.dart';
 import '../../../onboarding/presentation/widgets/profile_avatar.dart';
-import '../../../onboarding/application/onboarding_providers.dart';
-import '../../../onboarding/presentation/widgets/profile_avatar.dart';
 import '../../application/study_providers.dart';
 import '../../domain/mock_data.dart';
 import '../../domain/plan_data.dart';

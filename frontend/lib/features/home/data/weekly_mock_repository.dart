@@ -99,12 +99,24 @@ class SupabaseWeeklyMockRepository implements WeeklyMockRepository {
     final qNum = (row['question_number'] as num?)?.toInt();
     final setNum = (row['set_number'] as num?)?.toInt() ?? 0;
 
+    // The DB explanation is one templated blob ("✅ Correct… ❌ Wrong… 💡 Tip…").
+    // Split it into the correct reason, a per-option "why it's wrong" list, and
+    // the tip — so the UI can pin each reason to its own option and tuck the tip
+    // behind a toggle, instead of dumping the whole emoji-laden block at once.
+    final parsed = _parseExplanation(
+      (row['explanation'] as String?) ?? '',
+      options.length,
+      correctIndex,
+    );
+
     return MockQuestion(
       id: 'mock_s${setNum}_q${qNum ?? text.hashCode}',
       question: text,
       options: options,
       correctIndex: correctIndex,
-      explanation: (row['explanation'] as String?)?.trim() ?? '',
+      explanation: parsed.explanation,
+      whyWrong: parsed.whyWrong,
+      tip: parsed.tip,
       subject: (row['subject'] as String?)?.trim() ?? 'General',
       chapter: (row['chapter'] as String?)?.trim(),
       marks: (row['marks'] as num?)?.toInt() ?? 1,
@@ -118,4 +130,64 @@ class SupabaseWeeklyMockRepository implements WeeklyMockRepository {
     final code = a.codeUnitAt(0) - 65; // 'A' → 0
     return (code >= 0 && code <= 3) ? code : null;
   }
+
+  /// Breaks the templated explanation into its three parts. Falls back to the
+  /// whole (emoji-stripped) text as the explanation if the template markers
+  /// aren't found, so an off-format row still shows something sensible.
+  static ({String explanation, List<String> whyWrong, String? tip})
+      _parseExplanation(String raw, int optionCount, int correctIndex) {
+    final whyWrong = List<String>.filled(optionCount, '');
+    if (raw.trim().isEmpty) {
+      return (explanation: '', whyWrong: whyWrong, tip: null);
+    }
+
+    // Section boundaries, located by the template's labels.
+    final wrongMatch =
+        RegExp(r'Wrong Answer', caseSensitive: false).firstMatch(raw);
+    final tipMatch = RegExp(r'\bTip\b', caseSensitive: false).firstMatch(raw);
+
+    final tipStart = tipMatch?.start ?? raw.length;
+    var wrongStart = wrongMatch?.start ?? tipStart;
+    if (wrongStart > tipStart) wrongStart = tipStart;
+
+    var correctPart = raw.substring(0, wrongStart);
+    var wrongPart =
+        wrongMatch != null ? raw.substring(wrongStart, tipStart) : '';
+    var tipPart = tipMatch != null ? raw.substring(tipStart) : '';
+
+    // Strip the section labels themselves.
+    correctPart = correctPart.replaceAll(
+        RegExp(r'Correct Answer\s*\(?[A-D]?\)?\s*:?', caseSensitive: false), '');
+    wrongPart = wrongPart.replaceAll(
+        RegExp(r'Wrong Answers?\s*:?', caseSensitive: false), '');
+    tipPart = tipPart.replaceAll(RegExp(r'Tip\s*:?', caseSensitive: false), '');
+
+    // Pull each "A) reason  B) reason …" segment onto its option.
+    final letterRe =
+        RegExp(r'([A-D])\)\s*(.*?)(?=\s*[A-D]\)|$)', dotAll: true);
+    for (final m in letterRe.allMatches(wrongPart)) {
+      final idx = m.group(1)!.codeUnitAt(0) - 65;
+      if (idx >= 0 && idx < optionCount && idx != correctIndex) {
+        whyWrong[idx] = _clean(m.group(2) ?? '');
+      }
+    }
+
+    final explanation = _clean(correctPart);
+    final tipClean = _clean(tipPart);
+    return (
+      explanation: explanation,
+      whyWrong: whyWrong,
+      tip: tipClean.isEmpty ? null : tipClean,
+    );
+  }
+
+  /// Removes emojis/variation selectors and collapses whitespace.
+  static String _clean(String s) => s
+      .replaceAll(
+        RegExp(r'[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}]',
+            unicode: true),
+        ' ',
+      )
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
 }

@@ -65,6 +65,7 @@ class MockQuestion {
     this.chapter,
     this.marks = 1,
     this.hint,
+    this.tip,
     this.whyWrong = const [],
   });
 
@@ -86,6 +87,10 @@ class MockQuestion {
   /// Socratic nudge shown after the first wrong attempt — points the learner
   /// in the right direction without giving the answer away.
   final String? hint;
+
+  /// A post-answer memory aid ("the tip"), surfaced only behind a toggle on the
+  /// feedback panel so it never clutters the reveal. Null when there's none.
+  final String? tip;
 
   /// Why each wrong option is wrong, aligned with [options]; the entry at
   /// [correctIndex] is ignored. Empty list → no per-option notes.
