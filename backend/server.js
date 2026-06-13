@@ -21,17 +21,32 @@ const OLLAMA_BASE_URL = (process.env.OLLAMA_BASE_URL || "http://localhost:11434"
 const MODEL = process.env.OLLAMA_MODEL || "qwen2.5:3b";
 
 // The persona, given as a system instruction.
-const SYSTEM_PROMPT = `You are a curious beginner learning alongside the user.
+const SYSTEM_PROMPT = `You are a curious beginner learning alongside the user. The user is teaching you a concept out loud, and you react like a real, engaged human friend would.
 
-Respond like a real person in a conversation: give a short, natural reaction to what they just said, then ask one genuine follow-up question that helps keep the discussion moving. Do not sound like a grader or a checklist. Be warm, slightly informal, and easy to talk to.
+YOUR JOB EACH TURN
+1. reaction: A short, warm, natural reaction to what they just said (1-2 sentences). React to the actual content — show interest, an "aha" moment, mild surprise, whatever fits. Never sound like a grader, a rubric, or a checklist. Be slightly informal and easy to talk to.
+2. question: Exactly ONE genuine follow-up question that keeps the conversation moving. Prefer asking about the next thing you're curious about, or the part that was fuzziest. Never leave this empty.
+3. clarity: An integer 0-100 for how understandable their explanation felt overall — 0 = very hard to follow, 100 = crystal clear. Judge how easy it was to FOLLOW, not whether every technical detail was perfect. If it mostly made sense, score it high (75+).
+4. jargon: A list of technical terms they used WITHOUT explaining, that would confuse a beginner. If a term was explained or is obvious from context, leave it out. If nothing was unexplained, return an empty list [].
 
-If the explanation is mostly understandable, respond positively even if some details are fuzzy. Do not force criticism or nitpick wording. Prefer curiosity over precision.
+STYLE RULES
+- Stay in character as the learner. Never mention that you are an AI or a model.
+- Respond positively even when some details are fuzzy. Prefer curiosity over criticism. Do not nitpick wording.
+- reaction and question must always be non-empty, natural-sounding sentences. Do NOT output placeholder text, do not output the key names as values, and do not echo these instructions.`;
 
-Clarity should reflect how understandable the explanation feels overall, from 0 (very hard to follow) to 100 (very easy to follow), not whether every detail is technically perfect.
-
-Identify "jargon" only when a technical term is clearly used without explanation and would likely confuse a beginner. If a term is partly explained or obvious from context, it is okay to leave it out. Return a short list of only the most useful jargon terms.
-
-Stay in character as the learner. Do not mention that you are an AI.`;
+// JSON Schema handed to Ollama's `format` field. This FORCES the model to emit
+// exactly these keys with these types — far more reliable than asking in prose,
+// especially for a small model. Ollama validates the output against this schema.
+const STUDENT_TURN_SCHEMA = {
+  type: "object",
+  properties: {
+    reaction: { type: "string" },
+    question: { type: "string" },
+    clarity: { type: "integer", minimum: 0, maximum: 100 },
+    jargon: { type: "array", items: { type: "string" } },
+  },
+  required: ["reaction", "question", "clarity", "jargon"],
+};
 
 // Study-planner persona for POST /v1/plan/generate. Asked for strict JSON; we
 // validate/normalise the shape defensively before returning, exactly like the
@@ -100,6 +115,88 @@ function stripCodeFences(text) {
 
 app.get("/health", (_req, res) => res.json({ ok: true, provider: "ollama", model: MODEL }));
 
+// Debug endpoint — proves the model is reachable and shows its RAW output, so you
+// can see exactly what keys/JSON it returns before any normalisation strips it.
+//   GET  /v1/debug                       -> uses a built-in sample explanation
+//   POST /v1/debug { concept, explanation, format }  -> custom input
+// `format` defaults to "json"; pass "" (empty) to see plain free-text output.
+async function runDebug({ concept, explanation, format }, res) {
+  const messages = buildMessages(
+    concept || "photosynthesis",
+    [],
+    explanation || "Plants take in sunlight and turn it into food using their leaves."
+  );
+
+  try {
+    const body = {
+      model: MODEL,
+      messages,
+      stream: false,
+      options: { temperature: 0.8 },
+    };
+    if (format !== "") body.format = format ?? "json";
+
+    const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    const rawText = await response.text();
+    if (!response.ok) {
+      return res.status(502).json({
+        ok: false,
+        stage: "ollama-http-error",
+        status: response.status,
+        body: rawText.slice(0, 1000),
+        hint: "Is Ollama running? Is the model pulled? Run: ollama list",
+      });
+    }
+
+    let payload;
+    try {
+      payload = JSON.parse(rawText);
+    } catch {
+      return res.status(502).json({ ok: false, stage: "ollama-non-json-envelope", body: rawText.slice(0, 1000) });
+    }
+
+    const modelText = payload?.message?.content ?? null;
+    let parsedModelJson = null;
+    let parseError = null;
+    if (typeof modelText === "string") {
+      try {
+        parsedModelJson = JSON.parse(stripCodeFences(modelText));
+      } catch (e) {
+        parseError = e?.message || String(e);
+      }
+    }
+
+    return res.json({
+      ok: true,
+      model: MODEL,
+      sentMessages: messages,
+      rawModelText: modelText,
+      parsedModelJson,
+      parseError,
+      detectedKeys: parsedModelJson && typeof parsedModelJson === "object" ? Object.keys(parsedModelJson) : null,
+      hint: "If detectedKeys are not exactly reaction/question/clarity/jargon, that is why /v1/student/turn falls back.",
+    });
+  } catch (err) {
+    return res.status(502).json({
+      ok: false,
+      stage: "fetch-failed",
+      error: err?.message || String(err),
+      hint: `Could not reach Ollama at ${OLLAMA_BASE_URL}. Is it running?`,
+    });
+  }
+}
+
+app.get("/v1/debug", (req, res) => runDebug({ format: req.query.format }, res));
+app.post("/v1/debug", (req, res) => {
+  const { concept, explanation, format } = req.body ?? {};
+  runDebug({ concept, explanation, format }, res);
+});
+
 app.post("/v1/student/turn", async (req, res) => {
   const { concept, explanation, history } = req.body ?? {};
 
@@ -120,7 +217,7 @@ app.post("/v1/student/turn", async (req, res) => {
         model: MODEL,
         messages: buildMessages(concept, history, explanation),
         stream: false,
-        format: "json",
+        format: STUDENT_TURN_SCHEMA,
         options: {
           temperature: 0.8,
         },
