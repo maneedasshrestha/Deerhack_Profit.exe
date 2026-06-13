@@ -75,224 +75,288 @@ class _LastWeekRecap extends StatelessWidget {
 }
 
 // ─── Week header card ─────────────────────────────────────────────────────────
-class _WeekHeaderCard extends StatelessWidget {
+/// Collapsible week banner. Collapsed, it's a slim strip (week label, theme,
+/// progress) so the game map below gets the spotlight; expanded, it reveals the
+/// week's goals, blurb and the link into this week's topics & questions.
+class _WeekHeaderCard extends StatefulWidget {
   const _WeekHeaderCard({required this.week});
   final WeekPlan week;
+
+  @override
+  State<_WeekHeaderCard> createState() => _WeekHeaderCardState();
+}
+
+class _WeekHeaderCardState extends State<_WeekHeaderCard> {
+  // Start collapsed so the Duolingo path is the first thing the eye lands on.
+  bool _expanded = false;
+
+  void _toggle() => setState(() => _expanded = !_expanded);
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     final text = Theme.of(context).textTheme;
-    return Pressable(
-      scale: 0.98,
-      onTap: () => Navigator.of(
-        context,
-        rootNavigator: true,
-      ).push(MaterialPageRoute(builder: (_) => const WeekDetailScreen())),
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(26),
-          boxShadow: [
-            BoxShadow(
-              color: p.accent.withValues(alpha: 0.40),
-              blurRadius: 28,
-              offset: const Offset(0, 14),
-            ),
-            BoxShadow(
-              color: const Color(0xFF6D28D9).withValues(alpha: 0.22),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(26),
-          child: Stack(
-            children: [
-              // Base gradient.
-              const Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color(0xFF6D28D9), Color(0xFFA070FF)],
-                    ),
+    final week = widget.week;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        boxShadow: [
+          BoxShadow(
+            color: p.accent.withValues(alpha: 0.40),
+            blurRadius: 28,
+            offset: const Offset(0, 14),
+          ),
+          BoxShadow(
+            color: const Color(0xFF6D28D9).withValues(alpha: 0.22),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(26),
+        child: Stack(
+          children: [
+            // Base gradient.
+            const Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF6D28D9), Color(0xFFA070FF)],
                   ),
                 ),
               ),
-              // Fluid blobs that morph and drift behind the content.
-              const Positioned.fill(child: _FluidBlobs()),
-              // Glossy top sheen for a 3D, lit-from-above feel.
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.white.withValues(alpha: 0.16),
-                        Colors.white.withValues(alpha: 0),
-                      ],
-                      stops: const [0, 0.55],
-                    ),
+            ),
+            // Fluid blobs that morph and drift behind the content.
+            const Positioned.fill(child: _FluidBlobs()),
+            // Glossy top sheen for a 3D, lit-from-above feel.
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.white.withValues(alpha: 0.16),
+                      Colors.white.withValues(alpha: 0),
+                    ],
+                    stops: const [0, 0.55],
                   ),
                 ),
               ),
-              Padding(
+            ),
+            // Animate the height as the body grows/shrinks.
+            AnimatedSize(
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.topCenter,
+              child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'WEEK ${week.weekNumber} OF ${week.totalWeeks}',
-                            style: text.labelSmall?.copyWith(
-                              color: Colors.white.withValues(alpha: 0.85),
-                              letterSpacing: 1.6,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        ProgressRing(
-                          progress: week.progress,
-                          size: 42,
-                          strokeWidth: 4,
-                          color: Colors.white,
-                          backgroundColor: Colors.white.withValues(alpha: 0.25),
-                          child: Text(
-                            '${week.completedCount}/${week.levels.length}',
-                            style: text.labelSmall?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 9,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      week.theme,
-                      style: text.headlineSmall?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.adjust_rounded,
-                          size: 13,
-                          color: Colors.white.withValues(alpha: 0.8),
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          'GOALS TO CLEAR',
-                          style: text.labelSmall?.copyWith(
-                            color: Colors.white.withValues(alpha: 0.8),
-                            letterSpacing: 1.2,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        for (final t in week.targets)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 11,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.18),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.22),
-                                width: 1,
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
+                    // ── Always-visible header (tap to expand/collapse) ──
+                    Pressable(
+                      scale: 0.98,
+                      onTap: _toggle,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Container(
-                                  width: 5,
-                                  height: 5,
-                                  decoration: const BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Colors.white,
+                                Text(
+                                  'WEEK ${week.weekNumber} OF '
+                                  '${week.totalWeeks}',
+                                  style: text.labelSmall?.copyWith(
+                                    color:
+                                        Colors.white.withValues(alpha: 0.85),
+                                    letterSpacing: 1.6,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
-                                const SizedBox(width: 7),
+                                const SizedBox(height: 6),
                                 Text(
-                                  t,
-                                  style: text.labelSmall?.copyWith(
+                                  week.theme,
+                                  style: text.headlineSmall?.copyWith(
                                     color: Colors.white,
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Drafted from last week\'s mock — clear every level, then '
-                      'prove it in Sunday\'s test.',
-                      style: text.labelMedium?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.85),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    // Affordance: the whole card opens this week's topics + MCQs.
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.16),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.22),
-                          width: 1,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            'See topics & questions',
-                            style: text.labelMedium?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
+                          const SizedBox(width: 12),
+                          ProgressRing(
+                            progress: week.progress,
+                            size: 42,
+                            strokeWidth: 4,
+                            color: Colors.white,
+                            backgroundColor:
+                                Colors.white.withValues(alpha: 0.25),
+                            child: Text(
+                              '${week.completedCount}/${week.levels.length}',
+                              style: text.labelSmall?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 9,
+                              ),
                             ),
                           ),
-                          const SizedBox(width: 4),
-                          const Icon(
-                            Icons.arrow_forward_rounded,
-                            size: 16,
-                            color: Colors.white,
+                          const SizedBox(width: 6),
+                          AnimatedRotation(
+                            turns: _expanded ? 0.5 : 0.0,
+                            duration: const Duration(milliseconds: 280),
+                            curve: Curves.easeOutCubic,
+                            child: Icon(
+                              Icons.keyboard_arrow_down_rounded,
+                              color: Colors.white.withValues(alpha: 0.9),
+                              size: 26,
+                            ),
                           ),
                         ],
+                      ),
+                    ),
+                    // ── Collapsible body ──
+                    if (_expanded) _ExpandedBody(week: week),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The detail block revealed when the week card is expanded: the goals to
+/// clear, the planning blurb and the link into this week's topics & questions.
+class _ExpandedBody extends StatelessWidget {
+  const _ExpandedBody({required this.week});
+  final WeekPlan week;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Icon(
+              Icons.adjust_rounded,
+              size: 13,
+              color: Colors.white.withValues(alpha: 0.8),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              'GOALS TO CLEAR',
+              style: text.labelSmall?.copyWith(
+                color: Colors.white.withValues(alpha: 0.8),
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final t in week.targets)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 11,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.22),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 5,
+                      height: 5,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                    Text(
+                      t,
+                      style: text.labelSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
                 ),
               ),
-            ],
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Drafted from last week\'s mock — clear every level, then '
+          'prove it in Sunday\'s test.',
+          style: text.labelMedium?.copyWith(
+            color: Colors.white.withValues(alpha: 0.85),
           ),
         ),
-      ),
+        const SizedBox(height: 14),
+        // Affordance: opens this week's topics + MCQs.
+        Pressable(
+          scale: 0.98,
+          onTap: () => Navigator.of(
+            context,
+            rootNavigator: true,
+          ).push(MaterialPageRoute(builder: (_) => const WeekDetailScreen())),
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 8,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.22),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'See topics & questions',
+                  style: text.labelMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(
+                  Icons.arrow_forward_rounded,
+                  size: 16,
+                  color: Colors.white,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

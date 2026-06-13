@@ -33,6 +33,8 @@ dependencies:
   # Inter variable font for the typographic hierarchy.
   google_fonts: ^6.2.1
   lucide_icons: ^0.257.0
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^7.2.0
 
 dev_dependencies:
   flutter_test:
