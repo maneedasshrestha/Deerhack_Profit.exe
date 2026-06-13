@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui_kit.dart';
+import '../../../onboarding/application/auth_providers.dart';
 import '../../../onboarding/application/onboarding_providers.dart';
 import '../../../onboarding/application/plan_providers.dart';
 import '../../../onboarding/domain/curated_plan.dart';
@@ -108,13 +109,16 @@ class _ProfileHeader extends ConsumerWidget {
         name.split(' ').map((w) => w[0]).take(2).join();
     final examName = profile?.examName ?? PlanData.examName;
     final targetMarks = profile?.targetMarks ?? PlanData.targetMarks;
+    // Photo precedence: the learner's uploaded photo, else the Google avatar
+    // from their signed-in account (stored in Supabase auth metadata).
+    final photoPath = profile?.photoPath ?? ref.watch(signedInAvatarUrlProvider);
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
       child: Row(
         children: [
           ProfileAvatar(
             initials: initials,
-            photoPath: profile?.photoPath,
+            photoPath: photoPath,
             size: 62,
           ),
           const SizedBox(width: 16),
@@ -140,16 +144,25 @@ class _ProfileHeader extends ConsumerWidget {
 // ─── Exam countdown banner (the hero) ─────────────────────────────────────────
 // The run-up to D-day, framed as a finish line: a big day count and a runway
 // track that advances each prep week toward the checkered flag.
-class _ExamCountdownBanner extends StatelessWidget {
+class _ExamCountdownBanner extends ConsumerWidget {
   const _ExamCountdownBanner();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
     final text = Theme.of(context).textTheme;
-    const week = PlanData.currentWeek;
-    final progress =
-        ((week.weekNumber - 1) / week.totalWeeks).clamp(0.0, 1.0);
+    // Reflect what the learner picked at onboarding; fall back to the static
+    // demo values only before a profile exists.
+    final profile = ref.watch(userProfileProvider);
+    final plan = ref.watch(curatedPlanProvider);
+    final examName = profile?.examName ?? PlanData.examName;
+    final days = profile?.daysToExam() ?? PlanData.daysToExam;
+    final weekNumber = PlanData.currentWeek.weekNumber;
+    final totalWeeks = plan?.totalWeeks ??
+        (profile != null
+            ? (profile.daysToExam() / 7).round().clamp(1, 200)
+            : PlanData.currentWeek.totalWeeks);
+    final progress = ((weekNumber - 1) / totalWeeks).clamp(0.0, 1.0);
 
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 16, 20, 4),
@@ -174,7 +187,7 @@ class _ExamCountdownBanner extends StatelessWidget {
               Icon(Icons.sports_score_rounded, size: 15, color: p.accent),
               const SizedBox(width: 6),
               Text(
-                PlanData.examName.toUpperCase(),
+                examName.toUpperCase(),
                 style: text.labelSmall?.copyWith(
                   color: p.accent,
                   letterSpacing: 1.4,
@@ -189,7 +202,7 @@ class _ExamCountdownBanner extends StatelessWidget {
             textBaseline: TextBaseline.alphabetic,
             children: [
               Text(
-                '${PlanData.daysToExam}',
+                '$days',
                 style: text.displayMedium?.copyWith(
                   color: p.textPrimary,
                   fontWeight: FontWeight.w800,
@@ -211,7 +224,7 @@ class _ExamCountdownBanner extends StatelessWidget {
           _RunwayBar(progress: progress),
           const SizedBox(height: 10),
           Text(
-            'Week ${week.weekNumber} of ${week.totalWeeks}',
+            'Week $weekNumber of $totalWeeks',
             style: text.labelMedium?.copyWith(color: p.textTertiary),
           ),
         ],

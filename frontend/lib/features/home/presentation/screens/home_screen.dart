@@ -1,11 +1,17 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui_kit.dart';
+import '../../../onboarding/application/onboarding_providers.dart';
+import '../../../onboarding/application/plan_providers.dart';
+import '../../application/weekly_mock_providers.dart';
+import '../../application/week_progress_providers.dart';
 import '../../domain/mock_data.dart';
 import '../../domain/plan_data.dart';
+import '../../domain/week_plan_builder.dart';
 import 'flashcards_screen.dart';
 import 'lesson_screen.dart';
 import 'mock_test_screen.dart';
@@ -14,26 +20,51 @@ import 'week_detail_screen.dart';
 // ═══════════════════════════════════════════════════════════════════════════
 // HomeScreen — the weekly plan, rendered as a Duolingo-style path.
 // One week = daily MCQ levels → a bonus flashcard deck → Sunday's mock test.
+//
+// The map is built per-learner by [buildWeekPlan]: the days-to-exam decide a
+// plan tier, and each tier renders a different path. Falls back to the static
+// [PlanData.currentWeek] before onboarding has produced a profile.
 // ═══════════════════════════════════════════════════════════════════════════
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    const week = PlanData.currentWeek;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profile = ref.watch(userProfileProvider);
+    final plan = ref.watch(curatedPlanProvider);
+    // Before onboarding produces a profile, fall back to the static demo week
+    // as-is. Once there's a profile, build the week and overlay live progress so
+    // clearing a level unlocks the next and colours the mascot above it.
+    final WeekPlan week;
+    if (profile == null) {
+      week = PlanData.currentWeek;
+    } else {
+      final progress = ref.watch(weekProgressProvider);
+      week = applyProgress(
+        buildWeekPlan(profile: profile, plan: plan),
+        progress,
+      );
+    }
+    // Kick off (and cache) the Supabase question pull so daily levels and the
+    // Sunday mock both draw from the same real paper.
+    final pool = ref
+            .watch(weeklyMockExamProvider(week.weekNumber))
+            .valueOrNull
+            ?.questions ??
+        const <MockQuestion>[];
     return Scaffold(
       // The shared top bar lives in the shell above this screen.
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
           const SliverToBoxAdapter(child: _LastWeekRecap()),
-          const SliverToBoxAdapter(
+          SliverToBoxAdapter(
             child: StaggeredEntrance(
               index: 1,
               child: _WeekHeaderCard(week: week),
             ),
           ),
-          SliverToBoxAdapter(child: _WeekPath(week: week)),
+          SliverToBoxAdapter(child: _WeekPath(week: week, pool: pool)),
           const SliverToBoxAdapter(child: _NextWeekTeaser()),
           // Clearance for the floating glass nav bar.
           const SliverToBoxAdapter(child: SizedBox(height: 124)),
@@ -516,11 +547,14 @@ const List<String> _kMascots = <String>[
   'lib/assets/mascot/8.png',
 ];
 
-class _WeekPath extends StatelessWidget {
-  const _WeekPath({required this.week});
+class _WeekPath extends ConsumerWidget {
+  const _WeekPath({required this.week, required this.pool});
   final WeekPlan week;
 
-  void _open(BuildContext context, WeekLevel level) {
+  /// The full Supabase question paper, sliced per level. Empty while it loads.
+  final List<MockQuestion> pool;
+
+  void _open(BuildContext context, WidgetRef ref, WeekLevel level) {
     if (level.isLocked) {
       ScaffoldMessenger.of(context)
         ..clearSnackBars()
@@ -535,21 +569,28 @@ class _WeekPath extends StatelessWidget {
         );
       return;
     }
+    final progress = ref.read(weekProgressProvider.notifier);
     final route = switch (level.type) {
       LevelType.mcq => MaterialPageRoute<void>(
         fullscreenDialog: true,
         builder: (_) => LessonScreen(
           title: level.title,
-          questions: PlanData.questionsForLevel(level.id),
+          questions: questionsForLevel(level, pool),
+          onCompleted: (stars) => progress.complete(level.id, stars: stars),
         ),
       ),
       LevelType.flashcards => MaterialPageRoute<void>(
         fullscreenDialog: true,
-        builder: (_) => const FlashcardsScreen(),
+        builder: (_) => FlashcardsScreen(
+          onCompleted: () => progress.complete(level.id),
+        ),
       ),
       LevelType.mockTest => MaterialPageRoute<void>(
         fullscreenDialog: true,
-        builder: (_) => const MockTestScreen(),
+        builder: (_) => MockTestScreen(
+          weekNumber: week.weekNumber,
+          onCompleted: () => progress.complete(level.id),
+        ),
       ),
     };
     Navigator.of(context, rootNavigator: true).push(route);
@@ -561,7 +602,7 @@ class _WeekPath extends StatelessWidget {
       levels[i].isCurrent ? 0.0 : _dxFor(i);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final levels = week.levels;
     return Padding(
       padding: const EdgeInsets.only(top: 18),
@@ -589,7 +630,7 @@ class _WeekPath extends StatelessWidget {
                     offset: Offset(_dx(levels, i), 0),
                     child: _LevelNode(
                       level: levels[i],
-                      onTap: () => _open(context, levels[i]),
+                      onTap: () => _open(context, ref, levels[i]),
                     ),
                   ),
                 ),

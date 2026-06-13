@@ -21,6 +21,8 @@ class WeekLevel {
     required this.type,
     required this.status,
     required this.dayLabel,
+    this.subject,
+    this.questionCount = 10,
     this.stars = 0,
   });
 
@@ -32,11 +34,30 @@ class WeekLevel {
 
   /// Short tag above the node — a weekday like "Monday", or "Bonus"/"Sunday".
   final String dayLabel;
+
+  /// Subject this level drills (drives which questions it pulls from the bank).
+  /// Null means a mixed, all-subject level.
+  final String? subject;
+
+  /// How many questions this level serves.
+  final int questionCount;
   final int stars;
 
   bool get isLocked => status == LevelStatus.locked;
   bool get isCompleted => status == LevelStatus.completed;
   bool get isCurrent => status == LevelStatus.current;
+
+  WeekLevel copyWith({LevelStatus? status, int? stars}) => WeekLevel(
+        id: id,
+        title: title,
+        subtitle: subtitle,
+        type: type,
+        status: status ?? this.status,
+        dayLabel: dayLabel,
+        subject: subject,
+        questionCount: questionCount,
+        stars: stars ?? this.stars,
+      );
 }
 
 class WeekPlan {

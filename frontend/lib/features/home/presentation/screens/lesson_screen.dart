@@ -21,10 +21,15 @@ class LessonScreen extends ConsumerStatefulWidget {
     super.key,
     required this.title,
     required this.questions,
+    this.onCompleted,
   });
 
   final String title;
   final List<MockQuestion> questions;
+
+  /// Called once the level is finished, with the stars (0–3) earned — lets the
+  /// week map mark this level done and unlock the next.
+  final ValueChanged<int>? onCompleted;
 
   @override
   ConsumerState<LessonScreen> createState() => _LessonScreenState();
@@ -100,6 +105,8 @@ class _LessonScreenState extends ConsumerState<LessonScreen> {
   /// Finishing the day's MCQs extends the streak and shows the celebration,
   /// then returns to the week once the learner taps continue.
   void _finishWithStreak() {
+    // Mark the level cleared so the week map unlocks the next node.
+    widget.onCompleted?.call(_stars);
     final from = ref.read(streakProvider.notifier).registerDayComplete();
     final to = ref.read(streakProvider);
     final navigator = Navigator.of(context);

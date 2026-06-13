@@ -7,6 +7,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app.dart';
 import 'core/config/supabase_config.dart';
 import 'features/feynman/application/providers.dart';
+import 'features/home/application/weekly_mock_providers.dart';
+import 'features/home/data/weekly_mock_repository.dart';
 import 'features/feynman/data/repository/session_repository.dart';
 import 'features/onboarding/application/auth_providers.dart';
 import 'features/onboarding/application/onboarding_providers.dart';
@@ -62,6 +64,9 @@ Future<void> main() async {
           ),
           profileSyncProvider
               .overrideWithValue(const SupabaseProfileSyncService()),
+          // The weekly mock pulls full IOE papers from the `questions` table.
+          weeklyMockRepositoryProvider
+              .overrideWithValue(const SupabaseWeeklyMockRepository()),
         ],
       ],
       child: const FeynmanApp(),

@@ -62,6 +62,8 @@ class MockQuestion {
     required this.correctIndex,
     required this.explanation,
     required this.subject,
+    this.chapter,
+    this.marks = 1,
     this.hint,
     this.whyWrong = const [],
   });
@@ -72,6 +74,14 @@ class MockQuestion {
   final int correctIndex;
   final String explanation;
   final String subject;
+
+  /// Chapter/topic the question belongs to, when known (drives weak-spot
+  /// analysis on the real exam paper). Null for the static MVP bank.
+  final String? chapter;
+
+  /// Mark value of the question. The IOE paper mixes 1- and 2-mark questions,
+  /// so the mock is scored in marks, not question count. Defaults to 1.
+  final int marks;
 
   /// Socratic nudge shown after the first wrong attempt — points the learner
   /// in the right direction without giving the answer away.
