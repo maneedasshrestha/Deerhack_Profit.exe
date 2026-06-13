@@ -1,4 +1,5 @@
 import '../domain/duel_invite.dart';
+import '../domain/duel_leaderboard_entry.dart';
 import '../domain/duel_match.dart';
 import '../domain/duel_player.dart';
 
@@ -64,6 +65,9 @@ abstract class DuelRepository {
 
   /// An open challenge from the pool to quick-match into, or null if none.
   Future<DuelMatch?> findOpenChallenge(String excludeId);
+
+  /// Registered players ranked by wins (then duels played), top [limit] first.
+  Future<List<DuelLeaderboardEntry>> fetchLeaderboard({int limit = 20});
 }
 
 /// Compute the winner id of a finished duel (null = draw).
@@ -200,5 +204,37 @@ class InMemoryDuelRepository implements DuelRepository {
       }
     }
     return null;
+  }
+
+  @override
+  Future<List<DuelLeaderboardEntry>> fetchLeaderboard({int limit = 20}) async {
+    final entries = <DuelLeaderboardEntry>[];
+    for (final p in _players.values) {
+      var wins = 0, losses = 0, played = 0;
+      for (final d in _duels.values) {
+        if (!d.isCompleted) continue;
+        if (d.challengerId != p.id && d.opponentId != p.id) continue;
+        played++;
+        if (d.winnerId == p.id) {
+          wins++;
+        } else if (d.winnerId != null) {
+          losses++;
+        }
+      }
+      entries.add(DuelLeaderboardEntry(
+        id: p.id,
+        displayName: p.displayName,
+        initials: p.initials,
+        played: played,
+        wins: wins,
+        losses: losses,
+        photoUrl: p.photoUrl,
+      ));
+    }
+    entries.sort((a, b) {
+      final byWins = b.wins.compareTo(a.wins);
+      return byWins != 0 ? byWins : b.played.compareTo(a.played);
+    });
+    return entries.take(limit).toList();
   }
 }

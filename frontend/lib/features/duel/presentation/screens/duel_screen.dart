@@ -10,6 +10,7 @@ import '../../../onboarding/application/onboarding_providers.dart';
 import '../../../onboarding/presentation/widgets/profile_avatar.dart';
 import '../../application/duel_providers.dart';
 import '../../domain/duel_invite.dart';
+import '../../domain/duel_leaderboard_entry.dart';
 import '../../domain/duel_match.dart';
 import '../../domain/duel_player.dart';
 import 'duel_race_screen.dart';
@@ -66,6 +67,7 @@ class _DuelScreenState extends ConsumerState<DuelScreen> {
             ref.invalidate(duelStatsProvider);
             ref.invalidate(duelPlayersProvider);
             ref.invalidate(incomingChallengesProvider);
+            ref.invalidate(duelLeaderboardProvider);
             await ref.read(duelControllerProvider).registerSelf();
           },
           child: CustomScrollView(
@@ -81,6 +83,10 @@ class _DuelScreenState extends ConsumerState<DuelScreen> {
               SliverToBoxAdapter(child: SectionHeader('Online now')),
               SliverToBoxAdapter(
                 child: StaggeredEntrance(index: 2, child: _PlayersList()),
+              ),
+              SliverToBoxAdapter(child: SectionHeader('Leaderboard')),
+              SliverToBoxAdapter(
+                child: StaggeredEntrance(index: 3, child: _Leaderboard()),
               ),
               // Clearance for the floating glass nav bar.
               SliverToBoxAdapter(child: SizedBox(height: 124)),
@@ -708,6 +714,178 @@ class _PlayerRow extends StatelessWidget {
                 ),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Leaderboard: every duellist ranked by wins ───────────────────────────────
+class _Leaderboard extends ConsumerWidget {
+  const _Leaderboard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    final board = ref.watch(duelLeaderboardProvider);
+    final meId = ref.watch(currentPlayerProvider).id;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: board.when(
+        loading: () => const AppCard(
+          child: Center(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: CircularProgressIndicator(),
+            ),
+          ),
+        ),
+        error: (_, _) => AppCard(
+          child: Text('Couldn\'t load the leaderboard',
+              style: text.bodyMedium?.copyWith(color: p.textTertiary)),
+        ),
+        data: (all) {
+          // A leaderboard only means something once duels are decided — show
+          // players who've finished at least one, ranked highest wins first.
+          final ranked = all.where((e) => e.played > 0).toList();
+          if (ranked.isEmpty) {
+            return AppCard(
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Text(
+                  'No duels finished yet. Win a race to claim the top spot.',
+                  style: text.bodyMedium?.copyWith(color: p.textTertiary),
+                ),
+              ),
+            );
+          }
+          return AppCard(
+            padding: EdgeInsets.zero,
+            // Clip so a highlighted (You) row at the top/bottom keeps the
+            // card's rounded corners instead of poking out square.
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Column(
+                children: [
+                  for (var i = 0; i < ranked.length; i++) ...[
+                    _LeaderboardRow(
+                      rank: i + 1,
+                      entry: ranked[i],
+                      isMe: ranked[i].id == meId,
+                    ),
+                    if (i < ranked.length - 1)
+                      Divider(height: 0, thickness: 0.5, color: p.hairline),
+                  ],
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _LeaderboardRow extends StatelessWidget {
+  const _LeaderboardRow({
+    required this.rank,
+    required this.entry,
+    required this.isMe,
+  });
+
+  final int rank;
+  final DuelLeaderboardEntry entry;
+  final bool isMe;
+
+  // Medal tints for the top three; everyone else gets a plain numbered badge.
+  static const _gold = Color(0xFFE9A23B);
+  static const _silver = Color(0xFFAEB4C0);
+  static const _bronze = Color(0xFFC9803E);
+
+  Color? get _medal => switch (rank) {
+        1 => _gold,
+        2 => _silver,
+        3 => _bronze,
+        _ => null,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    final medal = _medal;
+
+    return Container(
+      // Subtly highlight the signed-in player's own standing.
+      color: isMe ? p.accent.withValues(alpha: 0.06) : null,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 26,
+            height: 26,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: medal != null
+                  ? medal.withValues(alpha: 0.18)
+                  : p.surfaceHigh,
+            ),
+            child: Text(
+              '$rank',
+              style: text.labelMedium?.copyWith(
+                color: medal ?? p.textTertiary,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          ProfileAvatar(
+            initials: entry.initials,
+            photoPath: entry.photoUrl,
+            size: 36,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    entry.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.labelLarge?.copyWith(
+                      color: isMe ? p.accent : null,
+                      fontWeight: isMe ? FontWeight.w700 : null,
+                    ),
+                  ),
+                ),
+                if (isMe) ...[
+                  const SizedBox(width: 6),
+                  TagChip(label: 'You', color: p.accent),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '${entry.wins} ${entry.wins == 1 ? 'win' : 'wins'}',
+                style: text.labelLarge?.copyWith(
+                  color: p.accent,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              Text(
+                '${entry.winRate}% · ${entry.played} played',
+                style: text.labelSmall?.copyWith(color: p.textTertiary),
+              ),
+            ],
           ),
         ],
       ),

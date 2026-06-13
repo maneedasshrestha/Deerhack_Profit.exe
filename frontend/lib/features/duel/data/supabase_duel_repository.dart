@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../domain/duel_invite.dart';
+import '../domain/duel_leaderboard_entry.dart';
 import '../domain/duel_match.dart';
 import '../domain/duel_player.dart';
 import 'duel_repository.dart';
@@ -16,6 +17,7 @@ class SupabaseDuelRepository implements DuelRepository {
 
   static const _players = 'duel_players';
   static const _duels = 'duels';
+  static const _leaderboard = 'duel_leaderboard';
 
   SupabaseClient get _sb => Supabase.instance.client;
 
@@ -175,5 +177,16 @@ class SupabaseDuelRepository implements DuelRepository {
         .limit(1)
         .maybeSingle();
     return row == null ? null : DuelMatch.fromJson(row);
+  }
+
+  @override
+  Future<List<DuelLeaderboardEntry>> fetchLeaderboard({int limit = 20}) async {
+    final rows = await _sb
+        .from(_leaderboard)
+        .select()
+        .order('wins', ascending: false)
+        .order('played', ascending: false)
+        .limit(limit);
+    return [for (final r in rows as List) DuelLeaderboardEntry.fromJson(r)];
   }
 }

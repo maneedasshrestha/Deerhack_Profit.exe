@@ -5,6 +5,7 @@ import '../../onboarding/application/auth_providers.dart';
 import '../../onboarding/application/onboarding_providers.dart';
 import '../data/duel_identity.dart';
 import '../data/duel_repository.dart';
+import '../domain/duel_leaderboard_entry.dart';
 import '../domain/duel_match.dart';
 import '../domain/duel_player.dart';
 
@@ -59,6 +60,12 @@ final duelPlayersProvider = FutureProvider<List<DuelPlayer>>((ref) {
 final incomingChallengesProvider = FutureProvider<List<DuelMatch>>((ref) {
   final player = ref.watch(currentPlayerProvider);
   return ref.watch(duelRepositoryProvider).fetchIncomingChallenges(player.id);
+});
+
+/// All registered duellists ranked by wins — backed by the leaderboard view.
+final duelLeaderboardProvider =
+    FutureProvider<List<DuelLeaderboardEntry>>((ref) {
+  return ref.watch(duelRepositoryProvider).fetchLeaderboard();
 });
 
 /// Coordinates duel writes and refreshes the derived providers afterwards.
@@ -123,5 +130,6 @@ class DuelController {
     _ref.invalidate(duelHistoryProvider);
     _ref.invalidate(incomingChallengesProvider);
     _ref.invalidate(duelPlayersProvider);
+    _ref.invalidate(duelLeaderboardProvider);
   }
 }
