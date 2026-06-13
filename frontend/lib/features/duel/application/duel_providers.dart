@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../home/domain/mock_data.dart';
+import '../../onboarding/application/auth_providers.dart';
 import '../../onboarding/application/onboarding_providers.dart';
 import '../data/duel_identity.dart';
 import '../data/duel_repository.dart';
@@ -26,7 +27,14 @@ final currentPlayerProvider = Provider<DuelPlayer>((ref) {
   final name = profile?.fullName.trim().isNotEmpty == true
       ? profile!.fullName
       : MockData.userName;
-  return identity.playerFor(name);
+  // Only a network URL is useful to other devices: prefer an uploaded photo
+  // that's already a remote URL, else the signed-in Google avatar. A local
+  // file path (the on-device uploaded photo) is skipped — it can't be shared.
+  final uploaded = profile?.photoPath;
+  final photoUrl = (uploaded != null && uploaded.startsWith('http'))
+      ? uploaded
+      : ref.watch(signedInAvatarUrlProvider);
+  return identity.playerFor(name, photoUrl: photoUrl);
 });
 
 /// Win / loss / played totals for the local player.

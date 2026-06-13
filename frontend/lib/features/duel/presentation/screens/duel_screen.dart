@@ -534,16 +534,11 @@ class _IncomingChallenges extends ConsumerWidget {
                         horizontal: 16, vertical: 12),
                     child: Row(
                       children: [
-                        CircleAvatar(
-                          radius: 18,
-                          backgroundColor: p.accentSoft,
-                          child: Text(
-                            DuelPlayer.initialsFor(incoming[i].challengerName),
-                            style: text.labelMedium?.copyWith(
-                              color: p.accent,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+                        ProfileAvatar(
+                          initials: DuelPlayer.initialsFor(
+                              incoming[i].challengerName),
+                          photoPath: incoming[i].challengerPhotoUrl,
+                          size: 36,
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -671,16 +666,10 @@ class _PlayerRow extends StatelessWidget {
         children: [
           Stack(
             children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: online ? p.accentSoft : p.surfaceHigh,
-                child: Text(
-                  player.initials,
-                  style: text.labelMedium?.copyWith(
-                    color: online ? p.accent : p.textTertiary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+              ProfileAvatar(
+                initials: player.initials,
+                photoPath: player.photoUrl,
+                size: 36,
               ),
               Positioned(
                 right: 0,

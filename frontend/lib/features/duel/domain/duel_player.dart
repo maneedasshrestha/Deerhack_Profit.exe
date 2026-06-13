@@ -11,12 +11,18 @@ class DuelPlayer {
     required this.id,
     required this.displayName,
     required this.initials,
+    this.photoUrl,
     this.updatedAt,
   });
 
   final String id;
   final String displayName;
   final String initials;
+
+  /// A shareable (network) avatar URL for this player, or null → fall back to
+  /// the gradient-initials avatar. Local file paths are intentionally not
+  /// stored here: they're meaningless on another device.
+  final String? photoUrl;
 
   /// Last time this player's row was touched. Used as an "online now" heuristic.
   final DateTime? updatedAt;
@@ -40,6 +46,7 @@ class DuelPlayer {
         displayName: json['display_name'] as String? ?? 'Player',
         initials: json['initials'] as String? ??
             initialsFor(json['display_name'] as String? ?? '?'),
+        photoUrl: json['photo_url'] as String?,
         updatedAt: json['updated_at'] == null
             ? null
             : DateTime.tryParse(json['updated_at'] as String),
@@ -49,5 +56,6 @@ class DuelPlayer {
         'id': id,
         'display_name': displayName,
         'initials': initials,
+        'photo_url': photoUrl,
       };
 }

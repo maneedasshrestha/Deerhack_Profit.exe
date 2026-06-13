@@ -86,6 +86,7 @@ class InMemoryDuelRepository implements DuelRepository {
       id: me.id,
       displayName: me.displayName,
       initials: me.initials,
+      photoUrl: me.photoUrl,
       updatedAt: DateTime.now().toUtc(),
     );
   }
@@ -107,11 +108,13 @@ class InMemoryDuelRepository implements DuelRepository {
       questionIds: questionIds,
       challengerId: challenger.id,
       challengerName: challenger.displayName,
+      challengerPhotoUrl: challenger.photoUrl,
       challengerAnswers: challengerAnswers,
       challengerScore: challengerScore,
       challengerFinishedAt: DateTime.now().toUtc(),
       opponentId: targetOpponent?.id,
       opponentName: targetOpponent?.displayName,
+      opponentPhotoUrl: targetOpponent?.photoUrl,
       createdAt: DateTime.now().toUtc(),
     );
     _duels[id] = duel;
@@ -137,6 +140,7 @@ class InMemoryDuelRepository implements DuelRepository {
     final withOpp = d.copyWith(
       opponentId: opponent.id,
       opponentName: opponent.displayName,
+      opponentPhotoUrl: opponent.photoUrl,
       opponentScore: opponentScore,
       opponentFinishedAt: DateTime.now().toUtc(),
       winnerId: duelWinnerId(d, opponent.id, opponentScore),
