@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../../../core/haptics.dart';
@@ -35,17 +36,53 @@ class _QrScanScreenState extends State<QrScanScreen>
   );
 
   bool _handled = false;
+  bool _analyzing = false;
   String? _matchedName;
 
   void _onDetect(BarcodeCapture capture) {
     if (_handled) return;
-    for (final barcode in capture.barcodes) {
+    _matchFrom(capture);
+  }
+
+  /// Returns true if a valid (non-self) invite was found and locked onto.
+  bool _matchFrom(BarcodeCapture? capture) {
+    for (final barcode in capture?.barcodes ?? const <Barcode>[]) {
       final name = DuelInvite.resolveName(barcode.rawValue);
       if (name != null && name != MockData.userName) {
         _lockOnto(name);
-        return;
+        return true;
       }
     }
+    return false;
+  }
+
+  /// Pick an image from the gallery and look for a race code inside it.
+  Future<void> _pickFromGallery() async {
+    if (_handled || _analyzing) return;
+    setState(() => _analyzing = true);
+    try {
+      final file =
+          await ImagePicker().pickImage(source: ImageSource.gallery);
+      if (file == null || _handled) return;
+      final capture = await _controller.analyzeImage(
+        file.path,
+        formats: const [BarcodeFormat.qrCode],
+      );
+      if (!mounted || _handled) return;
+      if (!_matchFrom(capture)) {
+        _showSnack('No valid duel code found in that image');
+      }
+    } catch (_) {
+      if (mounted) _showSnack('Couldn\'t read a code from that image');
+    } finally {
+      if (mounted) setState(() => _analyzing = false);
+    }
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+    );
   }
 
   Future<void> _lockOnto(String name) async {
@@ -175,13 +212,20 @@ class _QrScanScreenState extends State<QrScanScreen>
                 const SizedBox(height: 6),
                 Text(
                   detected
-                      ? 'Starting your race'
-                      : 'Point at a friend\'s race code to challenge them',
+                      ? 'Starting your duel'
+                      : 'Point at a friend\'s duel code to challenge them',
                   textAlign: TextAlign.center,
                   style: text.bodyMedium?.copyWith(
                     color: Colors.white.withValues(alpha: 0.7),
                   ),
                 ),
+                if (!detected) ...[
+                  const SizedBox(height: 22),
+                  _GalleryButton(
+                    busy: _analyzing,
+                    onTap: _pickFromGallery,
+                  ),
+                ],
               ],
             ),
           ),
@@ -243,10 +287,58 @@ class _CameraError extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               denied
-                  ? 'Enable camera access in Settings to scan a friend\'s race code.'
+                  ? 'Enable camera access in Settings to scan a friend\'s duel code.'
                   : 'Couldn\'t start the camera on this device.',
               textAlign: TextAlign.center,
               style: text.bodyMedium?.copyWith(color: Colors.white60),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A glassy "upload from gallery" pill shown beneath the scan caption.
+class _GalleryButton extends StatelessWidget {
+  const _GalleryButton({required this.busy, required this.onTap});
+  final bool busy;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return GestureDetector(
+      onTap: busy ? null : onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (busy)
+              const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation(Colors.white),
+                ),
+              )
+            else
+              const Icon(Icons.photo_library_rounded,
+                  color: Colors.white, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              busy ? 'Reading image…' : 'Upload from gallery',
+              style: text.labelLarge?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         ),

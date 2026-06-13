@@ -53,10 +53,10 @@ class _QrShareSheet extends StatelessWidget {
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          Text('Your race code', style: text.titleLarge),
+          Text('Your duel code', style: text.titleLarge),
           const SizedBox(height: 6),
           Text(
-            'Have a friend scan this to challenge you to a live race.',
+            'Have a friend scan this to challenge you to a live duel.',
             textAlign: TextAlign.center,
             style: text.bodyMedium,
           ),

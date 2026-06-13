@@ -12,7 +12,10 @@
 	<string>Used to transcribe your spoken explanation so the student can react to it.</string>
 	<!-- Race a friend: scan a friend's QR code to start a head-to-head race. -->
 	<key>NSCameraUsageDescription</key>
-	<string>Used to scan a friend's race code so you can challenge them to a live race.</string>
+	<string>Used to scan a friend's duel code so you can challenge them to a live duel, and to take a profile photo.</string>
+	<!-- Onboarding: choose a profile photo from your library. -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Used to set your profile photo during onboarding.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

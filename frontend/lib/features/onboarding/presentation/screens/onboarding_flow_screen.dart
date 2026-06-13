@@ -1,18 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui_kit.dart';
+import '../../application/auth_providers.dart';
 import '../../application/onboarding_providers.dart';
 import '../../application/plan_providers.dart';
+import '../../domain/auth_account.dart';
 import '../../domain/user_profile.dart';
+import '../widgets/profile_avatar.dart';
+import '../widgets/range_calendar.dart';
+import 'welcome_screen.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Onboarding signup — a calm, six-step flow that collects everything the
-// weekly plan is built from:
-//   0. Personal details  (name, email, password)
+// Onboarding — sign in with Google, then a calm six-step flow that collects
+// everything the weekly plan is built from:
+//   (gate) Continue with Google → name + email come from the account
+//   0. Your profile      (photo + name; email is from Google)
 //   1. Type of exam
 //   2. Exam date
 //   3. Target marks
@@ -38,12 +45,17 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
   final _page = PageController();
   int _step = 0;
 
+  // ── Account (from Google sign-in) ───────────────────────────────────────────
+  // Null until the learner signs in; while null the WelcomeScreen is shown.
+  AuthAccount? _account;
+
   // ── Draft state ────────────────────────────────────────────────────────────
+  // Name is pre-filled from the account but stays editable. Email is taken
+  // straight from the account (read-only). Password is gone — Google owns auth.
   final _nameCtrl = TextEditingController();
-  final _emailCtrl = TextEditingController();
-  final _passwordCtrl = TextEditingController();
   final _customExamCtrl = TextEditingController();
 
+  String? _photoPath; // chosen profile photo, or null → gradient-initials default
   String? _examId;
   DateTime? _examDate;
   int _targetMarks = 0;
@@ -55,7 +67,7 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
   void initState() {
     super.initState();
     // Re-evaluate the Continue button as the learner types.
-    for (final c in [_nameCtrl, _emailCtrl, _passwordCtrl, _customExamCtrl]) {
+    for (final c in [_nameCtrl, _customExamCtrl]) {
       c.addListener(() => setState(() {}));
     }
   }
@@ -64,8 +76,6 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
   void dispose() {
     _page.dispose();
     _nameCtrl.dispose();
-    _emailCtrl.dispose();
-    _passwordCtrl.dispose();
     _customExamCtrl.dispose();
     super.dispose();
   }
@@ -78,9 +88,9 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
   bool _canContinue() {
     switch (_step) {
       case 0:
-        return _nameCtrl.text.trim().isNotEmpty &&
-            _isValidEmail(_emailCtrl.text.trim()) &&
-            _passwordCtrl.text.length >= 6;
+        // Name is pre-filled from Google; just make sure it isn't blanked out.
+        // The photo is optional — we fall back to a default avatar.
+        return _nameCtrl.text.trim().isNotEmpty;
       case 1:
         if (_examId == null) return false;
         return !_isCustomExam || _customExamCtrl.text.trim().isNotEmpty;
@@ -95,8 +105,104 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
     }
   }
 
-  static bool _isValidEmail(String s) =>
-      RegExp(r'^[\w.+-]+@[\w-]+\.[\w.-]+$').hasMatch(s);
+  // ── Account & photo ──────────────────────────────────────────────────────────
+  void _onSignedIn(AuthAccount account) {
+    setState(() {
+      _account = account;
+      _nameCtrl.text = account.name;
+      _step = 0;
+    });
+    // A fresh sign-in always starts at the first step.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_page.hasClients) _page.jumpToPage(0);
+    });
+  }
+
+  Future<void> _signOut() async {
+    FocusScope.of(context).unfocus();
+    await ref.read(authServiceProvider).signOut();
+    if (!mounted) return;
+    setState(() {
+      _account = null;
+      _photoPath = null;
+      _nameCtrl.clear();
+      _step = 0;
+    });
+  }
+
+  Future<void> _pickPhotoFrom(ImageSource source) async {
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+      if (picked != null && mounted) setState(() => _photoPath = picked.path);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Couldn't open the photo picker.")),
+      );
+    }
+  }
+
+  void _showPhotoSheet() {
+    FocusScope.of(context).unfocus();
+    final p = context.palette;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: p.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetCtx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: p.hairline,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              _PhotoSheetTile(
+                icon: Icons.photo_camera_rounded,
+                label: 'Take a photo',
+                onTap: () {
+                  Navigator.of(sheetCtx).pop();
+                  _pickPhotoFrom(ImageSource.camera);
+                },
+              ),
+              _PhotoSheetTile(
+                icon: Icons.photo_library_rounded,
+                label: 'Choose from gallery',
+                onTap: () {
+                  Navigator.of(sheetCtx).pop();
+                  _pickPhotoFrom(ImageSource.gallery);
+                },
+              ),
+              if (_photoPath != null)
+                _PhotoSheetTile(
+                  icon: Icons.delete_outline_rounded,
+                  label: 'Remove photo',
+                  destructive: true,
+                  onTap: () {
+                    Navigator.of(sheetCtx).pop();
+                    setState(() => _photoPath = null);
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   // ── Navigation ───────────────────────────────────────────────────────────────
   void _next() {
@@ -128,7 +234,8 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
 
   Future<void> _finish() async {
     final exam = _exam;
-    if (exam == null || _examDate == null) return;
+    final account = _account;
+    if (exam == null || _examDate == null || account == null) return;
     setState(() => _submitting = true);
 
     final examName =
@@ -136,7 +243,7 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
 
     final profile = UserProfile(
       fullName: _nameCtrl.text.trim(),
-      email: _emailCtrl.text.trim(),
+      email: account.email,
       examId: exam.id,
       examName: examName,
       examDate: _examDate!,
@@ -144,6 +251,7 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
       totalMarks: exam.totalMarks,
       dailyHours: _dailyHours,
       createdAt: DateTime.now(),
+      photoPath: _photoPath,
     );
 
     HapticFeedback.mediumImpact();
@@ -158,6 +266,12 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
   Widget build(BuildContext context) {
     final p = context.palette;
 
+    // Front door: until they sign in, the whole screen is the welcome.
+    final account = _account;
+    if (account == null) {
+      return WelcomeScreen(onSignedIn: _onSignedIn);
+    }
+
     return Scaffold(
       backgroundColor: p.bg,
       body: SafeArea(
@@ -166,7 +280,8 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
             _Header(
               step: _step,
               stepCount: _stepCount,
-              onBack: _step == 0 ? null : _back,
+              // Backing out of the first step returns to the welcome screen.
+              onBack: _step == 0 ? _signOut : _back,
             ),
             Expanded(
               child: PageView(
@@ -174,10 +289,14 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
                 physics: const NeverScrollableScrollPhysics(),
                 onPageChanged: (i) => setState(() => _step = i),
                 children: [
-                  _PersonalDetailsStep(
+                  _ProfileStep(
                     nameCtrl: _nameCtrl,
-                    emailCtrl: _emailCtrl,
-                    passwordCtrl: _passwordCtrl,
+                    email: account.email,
+                    photoPath: _photoPath,
+                    initials: _nameCtrl.text.trim().isEmpty
+                        ? account.initials
+                        : _initialsOf(_nameCtrl.text),
+                    onEditPhoto: _showPhotoSheet,
                   ),
                   _ExamTypeStep(
                     selectedId: _examId,
@@ -208,6 +327,8 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
                   ),
                   _ReviewStep(
                     name: _nameCtrl.text.trim(),
+                    photoPath: _photoPath,
+                    initials: _initialsOf(_nameCtrl.text),
                     examName: _isCustomExam
                         ? _customExamCtrl.text.trim()
                         : (_exam?.name ?? ''),
@@ -231,27 +352,26 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
     );
   }
 
+  /// First initials of a typed name, e.g. "Aarav Sharma" → "AS". Falls back to
+  /// the signed-in account's initials (or "?") when the field is blank.
+  String _initialsOf(String name) {
+    final parts =
+        name.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty);
+    if (parts.isEmpty) return _account?.initials ?? '?';
+    return parts.map((w) => w[0].toUpperCase()).take(2).join();
+  }
+
   Future<void> _pickDate() async {
     FocusScope.of(context).unfocus();
-    final now = DateTime.now();
-    final p = context.palette;
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _examDate ?? now.add(const Duration(days: 100)),
-      firstDate: now.add(const Duration(days: 1)),
-      lastDate: now.add(const Duration(days: 365 * 3)),
-      helpText: 'When is your exam?',
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: ColorScheme.light(
-            primary: p.accent,
-            onPrimary: Colors.white,
-            surface: p.surface,
-            onSurface: p.textPrimary,
-          ),
-        ),
-        child: child!,
-      ),
+    final examLabel = _isCustomExam
+        ? (_customExamCtrl.text.trim().isEmpty
+            ? 'your exam'
+            : _customExamCtrl.text.trim())
+        : (_exam?.name ?? 'your exam');
+    final picked = await showExamDatePicker(
+      context,
+      initial: _examDate,
+      examName: examLabel,
     );
     if (picked != null) setState(() => _examDate = picked);
   }
@@ -398,81 +518,183 @@ class _StepBody extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Step 0 — personal details
+// Step 0 — your profile (photo + name; email comes from the Google account)
 // ═══════════════════════════════════════════════════════════════════════════
-class _PersonalDetailsStep extends StatefulWidget {
-  const _PersonalDetailsStep({
+class _ProfileStep extends StatelessWidget {
+  const _ProfileStep({
     required this.nameCtrl,
-    required this.emailCtrl,
-    required this.passwordCtrl,
+    required this.email,
+    required this.photoPath,
+    required this.initials,
+    required this.onEditPhoto,
   });
 
   final TextEditingController nameCtrl;
-  final TextEditingController emailCtrl;
-  final TextEditingController passwordCtrl;
-
-  @override
-  State<_PersonalDetailsStep> createState() => _PersonalDetailsStepState();
-}
-
-class _PersonalDetailsStepState extends State<_PersonalDetailsStep> {
-  bool _obscure = true;
+  final String email;
+  final String? photoPath;
+  final String initials;
+  final VoidCallback onEditPhoto;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    final hasPhoto = photoPath != null;
+
     return _StepBody(
       children: [
         const _StepIntro(
-          title: 'Let\'s set you up',
+          title: 'Make it yours',
           subtitle:
-              'A few details to create your account and personalise your plan.',
+              'Add a photo and confirm your name — you can change these anytime.',
         ),
+        // Tappable avatar with a camera badge.
+        Center(
+          child: StaggeredEntrance(
+            child: Pressable(
+              onTap: onEditPhoto,
+              scale: 0.96,
+              child: SizedBox(
+                width: 120,
+                height: 120,
+                child: Stack(
+                  children: [
+                    ProfileAvatar(
+                      initials: initials,
+                      photoPath: photoPath,
+                      size: 120,
+                    ),
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: p.accent,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: p.bg, width: 3),
+                        ),
+                        child: const Icon(Icons.photo_camera_rounded,
+                            size: 18, color: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Center(
+          child: Pressable(
+            onTap: onEditPhoto,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: Text(
+                hasPhoto ? 'Change photo' : 'Add a photo',
+                style: text.labelLarge?.copyWith(
+                  color: p.accent,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 28),
         _LabeledField(
           label: 'Full name',
           child: _OnboardingField(
-            controller: widget.nameCtrl,
+            controller: nameCtrl,
             hint: 'e.g. Aarav Sharma',
-            textInputAction: TextInputAction.next,
+            textInputAction: TextInputAction.done,
             textCapitalization: TextCapitalization.words,
             keyboardType: TextInputType.name,
             icon: Icons.person_outline_rounded,
           ),
         ),
         const SizedBox(height: 18),
-        _LabeledField(
-          label: 'Email',
-          child: _OnboardingField(
-            controller: widget.emailCtrl,
-            hint: 'you@example.com',
-            textInputAction: TextInputAction.next,
-            keyboardType: TextInputType.emailAddress,
-            icon: Icons.alternate_email_rounded,
-          ),
-        ),
-        const SizedBox(height: 18),
-        _LabeledField(
-          label: 'Password',
-          child: _OnboardingField(
-            controller: widget.passwordCtrl,
-            hint: 'At least 6 characters',
-            obscure: _obscure,
-            keyboardType: TextInputType.visiblePassword,
-            icon: Icons.lock_outline_rounded,
-            trailing: Pressable(
-              haptic: false,
-              onTap: () => setState(() => _obscure = !_obscure),
-              child: Icon(
-                _obscure
-                    ? Icons.visibility_outlined
-                    : Icons.visibility_off_outlined,
-                size: 20,
-                color: p.textTertiary,
-              ),
+        _SignedInChip(email: email),
+      ],
+    );
+  }
+}
+
+/// Read-only "signed in with Google" row — reassures the learner their account
+/// is connected without asking them to retype the email.
+class _SignedInChip extends StatelessWidget {
+  const _SignedInChip({required this.email});
+  final String email;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: p.surfaceHigh,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: p.hairline, width: 1),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.verified_rounded, size: 18, color: p.positive),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Signed in with Google',
+                    style: text.labelSmall?.copyWith(color: p.textTertiary)),
+                const SizedBox(height: 1),
+                Text(email,
+                    style: text.labelLarge
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+              ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One row in the "choose photo" bottom sheet.
+class _PhotoSheetTile extends StatelessWidget {
+  const _PhotoSheetTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.destructive = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool destructive;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    final color = destructive ? p.recordingDot : p.textPrimary;
+    return Pressable(
+      onTap: onTap,
+      scale: 0.99,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        child: Row(
+          children: [
+            Icon(icon, size: 22, color: destructive ? p.recordingDot : p.accent),
+            const SizedBox(width: 16),
+            Text(label,
+                style: text.titleMedium?.copyWith(color: color)),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
@@ -948,6 +1170,8 @@ class _StudyHoursStep extends StatelessWidget {
 class _ReviewStep extends StatelessWidget {
   const _ReviewStep({
     required this.name,
+    required this.photoPath,
+    required this.initials,
     required this.examName,
     required this.examDate,
     required this.targetMarks,
@@ -956,6 +1180,8 @@ class _ReviewStep extends StatelessWidget {
   });
 
   final String name;
+  final String? photoPath;
+  final String initials;
   final String examName;
   final DateTime? examDate;
   final int targetMarks;
@@ -971,6 +1197,16 @@ class _ReviewStep extends StatelessWidget {
 
     return _StepBody(
       children: [
+        Center(
+          child: StaggeredEntrance(
+            child: ProfileAvatar(
+              initials: initials,
+              photoPath: photoPath,
+              size: 76,
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
         _StepIntro(
           title: name.isEmpty ? 'All set' : 'Ready, $name',
           subtitle:
@@ -1100,8 +1336,6 @@ class _OnboardingField extends StatelessWidget {
     required this.controller,
     required this.hint,
     this.icon,
-    this.trailing,
-    this.obscure = false,
     this.autofocus = false,
     this.keyboardType,
     this.textInputAction,
@@ -1111,8 +1345,6 @@ class _OnboardingField extends StatelessWidget {
   final TextEditingController controller;
   final String hint;
   final IconData? icon;
-  final Widget? trailing;
-  final bool obscure;
   final bool autofocus;
   final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
@@ -1138,7 +1370,6 @@ class _OnboardingField extends StatelessWidget {
           Expanded(
             child: TextField(
               controller: controller,
-              obscureText: obscure,
               autofocus: autofocus,
               keyboardType: keyboardType,
               textInputAction: textInputAction,
@@ -1154,10 +1385,6 @@ class _OnboardingField extends StatelessWidget {
               ),
             ),
           ),
-          if (trailing != null) ...[
-            const SizedBox(width: 8),
-            trailing!,
-          ],
         ],
       ),
     );

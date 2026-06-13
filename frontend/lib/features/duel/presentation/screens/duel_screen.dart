@@ -46,14 +46,14 @@ class DuelScreen extends StatelessWidget {
           physics: const BouncingScrollPhysics(),
           slivers: [
             const SliverToBoxAdapter(child: StaggeredEntrance(child: _Hero())),
+            const SliverToBoxAdapter(child: SectionHeader('Versus a friend')),
             const SliverToBoxAdapter(
-                child: SectionHeader('Versus a friend')),
-            const SliverToBoxAdapter(
-                child: StaggeredEntrance(index: 1, child: _VersusActions())),
-            const SliverToBoxAdapter(
-                child: SectionHeader('Online now')),
+              child: StaggeredEntrance(index: 1, child: _VersusActions()),
+            ),
+            const SliverToBoxAdapter(child: SectionHeader('Online now')),
             SliverToBoxAdapter(
-                child: StaggeredEntrance(index: 2, child: _FriendsList())),
+              child: StaggeredEntrance(index: 2, child: _FriendsList()),
+            ),
             // Clearance for the floating glass nav bar.
             const SliverToBoxAdapter(child: SizedBox(height: 124)),
           ],
@@ -80,7 +80,9 @@ class _HeroState extends State<_Hero> with SingleTickerProviderStateMixin {
   void initState() {
     super.initState();
     _pulse = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 1300));
+      vsync: this,
+      duration: const Duration(milliseconds: 1300),
+    );
   }
 
   @override
@@ -151,8 +153,6 @@ class _HeroState extends State<_Hero> with SingleTickerProviderStateMixin {
             ),
           ),
           const SizedBox(height: 26),
-          Text('Race a friend', style: text.displayMedium),
-          const SizedBox(height: 8),
           Text(
             'Same questions, live. Fastest correct answer wins.',
             textAlign: TextAlign.center,
@@ -165,7 +165,11 @@ class _HeroState extends State<_Hero> with SingleTickerProviderStateMixin {
             children: [
               _StatPill(value: '$wins', label: 'wins', color: p.positive),
               const SizedBox(width: 10),
-              _StatPill(value: '$losses', label: 'losses', color: p.textTertiary),
+              _StatPill(
+                value: '$losses',
+                label: 'losses',
+                color: p.textTertiary,
+              ),
               const SizedBox(width: 10),
               _StatPill(value: '$rate%', label: 'win rate', color: p.accent),
             ],
@@ -184,7 +188,11 @@ class _HeroState extends State<_Hero> with SingleTickerProviderStateMixin {
 }
 
 class _StatPill extends StatelessWidget {
-  const _StatPill({required this.value, required this.label, required this.color});
+  const _StatPill({
+    required this.value,
+    required this.label,
+    required this.color,
+  });
   final String value;
   final String label;
   final Color color;
@@ -204,8 +212,10 @@ class _StatPill extends StatelessWidget {
         children: [
           Text(
             value,
-            style: text.labelLarge
-                ?.copyWith(color: color, fontWeight: FontWeight.w800),
+            style: text.labelLarge?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w800,
+            ),
           ),
           const SizedBox(width: 5),
           Text(label, style: text.labelSmall?.copyWith(color: p.textTertiary)),
@@ -397,8 +407,12 @@ class _FriendsList extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     // Online friends first — they're the only ones you can challenge live.
-    final friends = [...MockData.friends]..sort((a, b) =>
-        (b['online'] as bool ? 1 : 0).compareTo(a['online'] as bool ? 1 : 0));
+    final friends = [...MockData.friends]
+      ..sort(
+        (a, b) => (b['online'] as bool ? 1 : 0).compareTo(
+          a['online'] as bool ? 1 : 0,
+        ),
+      );
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: AppCard(
@@ -469,8 +483,10 @@ class _FriendRow extends StatelessWidget {
             Pressable(
               onTap: () => _startRace(context, friend['name'] as String),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 7,
+                ),
                 decoration: BoxDecoration(
                   color: p.accentSoft,
                   borderRadius: BorderRadius.circular(11),
@@ -485,8 +501,10 @@ class _FriendRow extends StatelessWidget {
               ),
             )
           else
-            Text('offline',
-                style: text.labelSmall?.copyWith(color: p.textTertiary)),
+            Text(
+              'offline',
+              style: text.labelSmall?.copyWith(color: p.textTertiary),
+            ),
         ],
       ),
     );

@@ -36,6 +36,10 @@ dependencies:
   qr_flutter: ^4.1.0
   mobile_scanner: ^7.2.0
 
+  # Onboarding profile photo — pick from gallery or camera. A default
+  # gradient-initials avatar is used when no photo is chosen.
+  image_picker: ^1.1.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
