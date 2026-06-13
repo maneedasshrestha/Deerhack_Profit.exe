@@ -34,6 +34,16 @@ dependencies:
   google_fonts: ^6.2.1
   lucide_icons_flutter: ^3.0.0
 
+  # QR duel flow: generate invite codes, scan them via the camera, and pick
+  # an image from the gallery to decode a code offline.
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^5.2.3
+  image_picker: ^1.1.2
+
+  # Auth + profile sync backend.
+  supabase_flutter: ^2.5.6
+  google_sign_in: ^6.2.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

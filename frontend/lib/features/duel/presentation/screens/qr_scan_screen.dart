@@ -64,10 +64,7 @@ class _QrScanScreenState extends State<QrScanScreen>
       final file =
           await ImagePicker().pickImage(source: ImageSource.gallery);
       if (file == null || _handled) return;
-      final capture = await _controller.analyzeImage(
-        file.path,
-        formats: const [BarcodeFormat.qrCode],
-      );
+      final capture = await _controller.analyzeImage(file.path);
       if (!mounted || _handled) return;
       if (!_matchFrom(capture)) {
         _showSnack('No valid duel code found in that image');
@@ -126,7 +123,7 @@ class _QrScanScreenState extends State<QrScanScreen>
             child: MobileScanner(
               controller: _controller,
               onDetect: _onDetect,
-              errorBuilder: (context, error) =>
+              errorBuilder: (context, error, child) =>
                   _CameraError(error: error, palette: p),
               fit: BoxFit.cover,
             ),
