@@ -172,8 +172,7 @@ class _WeekHeaderCardState extends State<_WeekHeaderCard> {
                                   'WEEK ${week.weekNumber} OF '
                                   '${week.totalWeeks}',
                                   style: text.labelSmall?.copyWith(
-                                    color:
-                                        Colors.white.withValues(alpha: 0.85),
+                                    color: Colors.white.withValues(alpha: 0.85),
                                     letterSpacing: 1.6,
                                     fontWeight: FontWeight.w700,
                                   ),
@@ -195,8 +194,9 @@ class _WeekHeaderCardState extends State<_WeekHeaderCard> {
                             size: 42,
                             strokeWidth: 4,
                             color: Colors.white,
-                            backgroundColor:
-                                Colors.white.withValues(alpha: 0.25),
+                            backgroundColor: Colors.white.withValues(
+                              alpha: 0.25,
+                            ),
                             child: Text(
                               '${week.completedCount}/${week.levels.length}',
                               style: text.labelSmall?.copyWith(
@@ -324,10 +324,7 @@ class _ExpandedBody extends StatelessWidget {
             rootNavigator: true,
           ).push(MaterialPageRoute(builder: (_) => const WeekDetailScreen())),
           child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 8,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.16),
               borderRadius: BorderRadius.circular(12),
@@ -419,8 +416,10 @@ class _BlobPainter extends CustomPainter {
     // Large blob, top-right.
     _blob(
       canvas,
-      center: Offset(size.width * 0.84 + 16 * math.sin(phase),
-          size.height * 0.16 + 18 * math.cos(phase * 0.8)),
+      center: Offset(
+        size.width * 0.84 + 16 * math.sin(phase),
+        size.height * 0.16 + 18 * math.cos(phase * 0.8),
+      ),
       baseR: s * 0.46,
       phase: phase,
       alpha: 0.16,
@@ -431,8 +430,10 @@ class _BlobPainter extends CustomPainter {
     // Larger, softer blob, bottom-left.
     _blob(
       canvas,
-      center: Offset(size.width * 0.12 + 20 * math.cos(phase * 0.7),
-          size.height * 0.92 + 16 * math.sin(phase * 1.1)),
+      center: Offset(
+        size.width * 0.12 + 20 * math.cos(phase * 0.7),
+        size.height * 0.92 + 16 * math.sin(phase * 1.1),
+      ),
       baseR: s * 0.54,
       phase: phase * 1.3 + 1.5,
       alpha: 0.12,
@@ -443,8 +444,10 @@ class _BlobPainter extends CustomPainter {
     // Small brighter accent blob roaming the middle.
     _blob(
       canvas,
-      center: Offset(size.width * 0.5 + 34 * math.sin(phase * 1.4),
-          size.height * 0.42 + 22 * math.cos(phase)),
+      center: Offset(
+        size.width * 0.5 + 34 * math.sin(phase * 1.4),
+        size.height * 0.42 + 22 * math.cos(phase),
+      ),
       baseR: s * 0.2,
       phase: phase * 1.7,
       alpha: 0.10,
@@ -468,7 +471,8 @@ class _BlobPainter extends CustomPainter {
     final path = Path();
     for (var i = 0; i <= n; i++) {
       final a = (i / n) * 2 * math.pi;
-      final r = baseR *
+      final r =
+          baseR *
           (1 +
               h[0] * math.sin(3 * a + phase) +
               h[1] * math.sin(5 * a - phase * 1.3) +
@@ -499,6 +503,18 @@ class _BlobPainter extends CustomPainter {
 const double _kAmplitude = 64;
 
 double _dxFor(int i) => math.sin(i * math.pi / 2) * _kAmplitude;
+
+/// Mascot art that lives in the gaps between levels, one per trail. Cycled in
+/// order down the path; each stays greyed out until the level just below it is
+/// cleared, then springs to colour.
+const List<String> _kMascots = <String>[
+  'lib/assets/mascot/3.png',
+  'lib/assets/mascot/4.png',
+  'lib/assets/mascot/5.png',
+  'lib/assets/mascot/6.png',
+  'lib/assets/mascot/7.png',
+  'lib/assets/mascot/8.png',
+];
 
 class _WeekPath extends StatelessWidget {
   const _WeekPath({required this.week});
@@ -563,8 +579,7 @@ class _WeekPath extends StatelessWidget {
                     done: levels[i - 1].isCompleted,
                     // A mascot sits in the gap; it stays greyed out until the
                     // level just below it is cleared, then springs to colour.
-                    // TODO(art): supply real art via `mascotAsset:` later, e.g.
-                    //   mascotAsset: 'assets/mascots/owl.png'
+                    mascotAsset: _kMascots[(i - 1) % _kMascots.length],
                     mascotUnlocked: levels[i].isCompleted,
                     mascotOnLeft: i.isEven,
                   ),
@@ -595,7 +610,6 @@ class _Trail extends StatelessWidget {
     required this.done,
     required this.mascotUnlocked,
     required this.mascotOnLeft,
-    // ignore: unused_element_parameter
     this.mascotAsset,
   });
 
@@ -612,9 +626,15 @@ class _Trail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    // Sit the mascot in whichever side the path *isn't* leaning into, so the
+    // bigger art never overlaps the connector or the level nodes. When the gap
+    // is centred (current level pinned to middle) fall back to the zigzag
+    // parity so consecutive mascots still alternate sides.
+    final lean = fromDx + toDx;
+    final onLeft = lean == 0 ? mascotOnLeft : lean > 0;
     return SizedBox(
       width: double.infinity,
-      height: 62,
+      height: 128,
       child: Stack(
         alignment: Alignment.center,
         children: [
@@ -628,9 +648,9 @@ class _Trail extends StatelessWidget {
             ),
           ),
           Align(
-            alignment: mascotOnLeft
-                ? const Alignment(-0.66, 0)
-                : const Alignment(0.66, 0),
+            alignment: onLeft
+                ? const Alignment(-0.82, 0)
+                : const Alignment(0.82, 0),
             child: _MascotSlot(unlocked: mascotUnlocked, asset: mascotAsset),
           ),
         ],
@@ -650,7 +670,7 @@ class _MascotSlot extends StatelessWidget {
   final bool unlocked;
   final String? asset;
 
-  static const double size = 50;
+  static const double size = 124;
 
   @override
   Widget build(BuildContext context) {

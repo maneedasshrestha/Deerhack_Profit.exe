@@ -52,5 +52,29 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
 
+  # Generates platform-specific launcher icons from a single source image.
+  flutter_launcher_icons: ^0.14.3
+
 flutter:
   uses-material-design: true
+
+  assets:
+    - lib/assets/mascot/
+
+flutter_launcher_icons:
+  image_path: "lib/assets/logo.png"
+  android: true
+  ios: true
+  # Android adaptive icon (API 26+): foreground is inset into the launcher
+  # "safe zone" so circular/squircle masks don't clip the seal; the white
+  # background matches the logo's own surround.
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "lib/assets/logo.png"
+  web:
+    generate: true
+  windows:
+    generate: true
+    icon_size: 256
+  macos:
+    generate: true
+  remove_alpha_ios: true
