@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui_kit.dart';
+import '../../../onboarding/application/auth_providers.dart';
 import '../../../onboarding/application/onboarding_providers.dart';
 import '../../../onboarding/presentation/widgets/profile_avatar.dart';
 import '../../application/duel_providers.dart';
@@ -144,7 +145,10 @@ class _HeroState extends ConsumerState<_Hero>
     final p = context.palette;
     final text = Theme.of(context).textTheme;
     final me = ref.watch(currentPlayerProvider);
-    final myPhoto = ref.watch(userProfileProvider)?.photoPath;
+    // Same photo precedence as the profile screen / top bar: the learner's
+    // uploaded photo, else the signed-in Google avatar.
+    final myPhoto = ref.watch(userProfileProvider)?.photoPath ??
+        ref.watch(signedInAvatarUrlProvider);
     final stats = ref.watch(duelStatsProvider);
     final wins = stats.valueOrNull?.wins ?? 0;
     final losses = stats.valueOrNull?.losses ?? 0;

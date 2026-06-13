@@ -16,13 +16,25 @@ class MockStudentEngine implements StudentEngine {
   final Duration _thinkingDelay;
   final Random _rng;
 
-  // Words a curious kid would already know — never flagged as jargon.
+  // Words a curious kid would already know — never flagged as jargon. Includes
+  // ordinary "explaining" words (because/example/different/…) so the act of
+  // explaining a term doesn't itself trip the jargon detector.
   static const _common = {
     'the', 'and', 'that', 'this', 'with', 'from', 'into', 'when', 'then',
     'they', 'have', 'what', 'which', 'because', 'about', 'there', 'their',
     'would', 'could', 'really', 'kind', 'like', 'just', 'some', 'more',
     'water', 'light', 'energy', 'plant', 'food', 'heat', 'cold', 'fast',
     'slow', 'small', 'big', 'happens', 'makes', 'turns', 'moves',
+    // Common explanatory / filler words — long enough to look like jargon but
+    // not actually technical terms.
+    'basically', 'actually', 'something', 'someone', 'different', 'example',
+    'examples', 'important', 'explain', 'explains', 'explained', 'explanation',
+    'through', 'between', 'another', 'without', 'sometimes', 'usually',
+    'generally', 'essentially', 'represents', 'represent', 'process', 'little',
+    'around', 'against', 'therefore', 'however', 'meaning', 'means', 'called',
+    'basic', 'simple', 'simply', 'thing', 'things', 'where', 'while', 'these',
+    'those', 'using', 'used', 'uses', 'amount', 'number', 'inside', 'outside',
+    'together', 'instead', 'becomes', 'become', 'change', 'changes', 'whenever',
   };
 
   static const _reactions = [
@@ -38,12 +50,20 @@ class MockStudentEngine implements StudentEngine {
     // Simulate the network/model "thinking" pause so the UI behaves identically.
     await Future<void>.delayed(_thinkingDelay);
 
-    final words = request.explanation
-        .split(RegExp(r'[\s.,;:!?()"]+'))
-        .where((w) => w.isNotEmpty)
-        .toList();
+    final words = _tokenize(request.explanation);
 
-    final jargon = _detectJargon(words);
+    // Terms already in play — the concept being taught, plus everything the
+    // learner said in earlier explanations. A word that's already been raised
+    // (and, by now, asked about) must NOT be flagged again, or explaining a
+    // buzzword would just surface the same buzzword and loop forever.
+    final addressed = <String>{
+      for (final w in _tokenize(request.concept)) w.toLowerCase(),
+      for (final turn in request.history)
+        if (!turn.isStudent)
+          for (final w in _tokenize(turn.text)) w.toLowerCase(),
+    };
+
+    final jargon = _detectJargon(words, addressed);
     final clarity = _scoreClarity(words, jargon);
     final reaction = _reactions[_rng.nextInt(_reactions.length)];
     final question = _composeQuestion(jargon, request.concept);
@@ -56,13 +76,23 @@ class MockStudentEngine implements StudentEngine {
     );
   }
 
-  List<String> _detectJargon(List<String> words) {
+  /// Splits text into bare words, dropping punctuation/markdown emphasis.
+  List<String> _tokenize(String text) => text
+      .split(RegExp(r'[\s.,;:!?()"*_]+'))
+      .where((w) => w.isNotEmpty)
+      .toList();
+
+  /// Picks up to three NEW long words to ask about. [addressed] holds terms
+  /// already raised earlier in the session (concept name + prior explanations);
+  /// those are skipped so a term is only ever questioned once.
+  List<String> _detectJargon(List<String> words, Set<String> addressed) {
     final seen = <String>{};
     final result = <String>[];
     for (final w in words) {
       final lower = w.toLowerCase();
       if (lower.length < 7) continue; // short words are rarely jargon
       if (_common.contains(lower)) continue;
+      if (addressed.contains(lower)) continue; // already asked about earlier
       if (seen.contains(lower)) continue;
       seen.add(lower);
       result.add(w);
