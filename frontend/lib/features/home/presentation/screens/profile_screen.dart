@@ -6,6 +6,7 @@ import '../../../../core/widgets/ui_kit.dart';
 import '../../../onboarding/application/onboarding_providers.dart';
 import '../../../onboarding/application/plan_providers.dart';
 import '../../../onboarding/domain/curated_plan.dart';
+import '../../../onboarding/presentation/widgets/profile_avatar.dart';
 import '../../application/study_providers.dart';
 import '../../domain/mock_data.dart';
 import '../../domain/plan_data.dart';
@@ -111,24 +112,10 @@ class _ProfileHeader extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
       child: Row(
         children: [
-          Container(
-            width: 62,
-            height: 62,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [Color(0xFF7C3AED), Color(0xFF9F5BFF)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: Center(
-              child: Text(
-                initials,
-                style: text.headlineSmall?.copyWith(
-                    color: Colors.white, fontWeight: FontWeight.w700),
-              ),
-            ),
+          ProfileAvatar(
+            initials: initials,
+            photoPath: profile?.photoPath,
+            size: 62,
           ),
           const SizedBox(width: 16),
           Expanded(

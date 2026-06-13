@@ -2,6 +2,10 @@
     <!-- Feynman feature: mic for speech-to-text, network for the backend proxy. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Race a friend: scan a friend's QR code to start a head-to-head race. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>
     <application
         android:label="frontend"
         android:name="${applicationName}"

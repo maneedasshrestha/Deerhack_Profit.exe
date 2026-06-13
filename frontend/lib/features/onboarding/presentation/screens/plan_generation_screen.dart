@@ -1,10 +1,10 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui_kit.dart';
 import '../../application/onboarding_providers.dart';
@@ -166,8 +166,8 @@ class _LoadingView extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const _PulseLoader(size: 132),
-        const SizedBox(height: 40),
+        const _AssemblingPlanLoader(),
+        const SizedBox(height: 36),
         Text(
           'Building your plan',
           style: text.displayMedium?.copyWith(fontSize: 30),
@@ -220,24 +220,35 @@ class _LoadingView extends StatelessWidget {
   }
 }
 
-// ─── A self-contained pulsing-ring loader in the brand accent ────────────────
-class _PulseLoader extends StatefulWidget {
-  const _PulseLoader({required this.size});
-  final double size;
+// ─── Loader: the plan assembling itself ──────────────────────────────────────
+// Skeleton week-cards slide in one after another, and a soft violet sheen sweeps
+// across them on a loop — so the wait reads as "your plan is being built", not
+// "something is spinning". Honours reduce-motion (cards present, no sweep).
+class _AssemblingPlanLoader extends StatefulWidget {
+  const _AssemblingPlanLoader();
 
   @override
-  State<_PulseLoader> createState() => _PulseLoaderState();
+  State<_AssemblingPlanLoader> createState() => _AssemblingPlanLoaderState();
 }
 
-class _PulseLoaderState extends State<_PulseLoader>
+class _AssemblingPlanLoaderState extends State<_AssemblingPlanLoader>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(seconds: 2))
-        ..repeat();
+  late final AnimationController _shimmer = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1500),
+  )..repeat();
+
+  // Per-card bar widths, so the stack looks composed rather than cloned.
+  static const _bars = <List<double>>[
+    [0.66, 0.42],
+    [0.56, 0.50],
+    [0.72, 0.38],
+    [0.50, 0.46],
+  ];
 
   @override
   void dispose() {
-    _c.dispose();
+    _shimmer.dispose();
     super.dispose();
   }
 
@@ -245,64 +256,128 @@ class _PulseLoaderState extends State<_PulseLoader>
   Widget build(BuildContext context) {
     final p = context.palette;
     final reduceMotion = MediaQuery.of(context).disableAnimations;
-    return SizedBox(
-      width: widget.size,
-      height: widget.size,
-      child: AnimatedBuilder(
-        animation: _c,
-        builder: (context, _) {
-          final t = reduceMotion ? 0.0 : _c.value;
-          return CustomPaint(
-            painter: _PulsePainter(
-              t: t,
-              core: p.accent,
-              glow: p.accentSoft,
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 320),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                for (var i = 0; i < _bars.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 12),
+                  StaggeredEntrance(
+                    index: i,
+                    baseDelay: const Duration(milliseconds: 140),
+                    child: _SkeletonWeekCard(widths: _bars[i]),
+                  ),
+                ],
+              ],
             ),
-          );
-        },
+            if (!reduceMotion)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: AnimatedBuilder(
+                    animation: _shimmer,
+                    builder: (context, _) => LayoutBuilder(
+                      builder: (context, c) {
+                        const band = 96.0;
+                        final dx = (c.maxWidth + band) * _shimmer.value - band;
+                        return Transform.translate(
+                          offset: Offset(dx, 0),
+                          child: Transform(
+                            transform: Matrix4.skewX(-0.32),
+                            child: Container(
+                              width: band,
+                              height: c.maxHeight,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    p.accent.withValues(alpha: 0),
+                                    p.accent.withValues(alpha: 0.18),
+                                    p.accent.withValues(alpha: 0),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _PulsePainter extends CustomPainter {
-  _PulsePainter({required this.t, required this.core, required this.glow});
+/// A single placeholder plan card: a tinted leading tile + two shimmer bars.
+class _SkeletonWeekCard extends StatelessWidget {
+  const _SkeletonWeekCard({required this.widths});
 
-  final double t;
-  final Color core;
-  final Color glow;
+  /// Fractional widths of the two text-line placeholders.
+  final List<double> widths;
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final center = size.center(Offset.zero);
-    final maxR = size.shortestSide / 2;
-
-    // Two expanding, fading rings staggered by half a cycle.
-    for (final phase in [0.0, 0.5]) {
-      final v = (t + phase) % 1.0;
-      final r = maxR * (0.42 + v * 0.58);
-      final alpha = (1.0 - v) * 0.5;
-      final ring = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
-        ..color = core.withValues(alpha: alpha);
-      canvas.drawCircle(center, r, ring);
-    }
-
-    // Soft glow halo.
-    canvas.drawCircle(
-      center,
-      maxR * 0.46,
-      Paint()..color = glow.withValues(alpha: 0.6),
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: p.hairline, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2A2150).withValues(alpha: 0.05),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: p.accentSoft,
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _bar(p, widthFactor: widths[0], height: 11),
+                const SizedBox(height: 9),
+                _bar(p, widthFactor: widths[1], height: 9),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
-
-    // Solid breathing core.
-    final pulse = 0.40 + 0.06 * (1 + math.sin(t * 2 * math.pi));
-    canvas.drawCircle(center, maxR * pulse, Paint()..color = core);
   }
 
-  @override
-  bool shouldRepaint(_PulsePainter old) => old.t != t;
+  Widget _bar(AppPalette p,
+          {required double widthFactor, required double height}) =>
+      FractionallySizedBox(
+        alignment: Alignment.centerLeft,
+        widthFactor: widthFactor,
+        child: Container(
+          height: height,
+          decoration: BoxDecoration(
+            color: p.surfaceHigh,
+            borderRadius: BorderRadius.circular(height / 2),
+          ),
+        ),
+      );
 }
 
 // ─── Error view: retry or fall back to a local starter plan ──────────────────

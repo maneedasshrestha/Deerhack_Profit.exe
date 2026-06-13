@@ -93,10 +93,19 @@ class UserProfile {
     required this.totalMarks,
     required this.dailyHours,
     required this.createdAt,
+    this.photoPath,
   });
 
   final String fullName;
   final String email;
+
+  /// Local file path to the chosen profile photo, or null to fall back to the
+  /// gradient-initials avatar. (A device path for now; becomes a remote URL once
+  /// photos are uploaded to Supabase storage.)
+  final String? photoPath;
+
+  /// Whether a real photo was set (vs the default avatar).
+  bool get hasPhoto => photoPath != null && photoPath!.isNotEmpty;
 
   /// One of [ExamCatalog] ids (or `custom`).
   final String examId;
@@ -144,6 +153,7 @@ class UserProfile {
     int? totalMarks,
     double? dailyHours,
     DateTime? createdAt,
+    String? photoPath,
   }) {
     return UserProfile(
       fullName: fullName ?? this.fullName,
@@ -155,6 +165,7 @@ class UserProfile {
       totalMarks: totalMarks ?? this.totalMarks,
       dailyHours: dailyHours ?? this.dailyHours,
       createdAt: createdAt ?? this.createdAt,
+      photoPath: photoPath ?? this.photoPath,
     );
   }
 
@@ -168,6 +179,7 @@ class UserProfile {
         'totalMarks': totalMarks,
         'dailyHours': dailyHours,
         'createdAt': createdAt.toIso8601String(),
+        'photoPath': photoPath,
       };
 
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
@@ -180,5 +192,6 @@ class UserProfile {
         totalMarks: (json['totalMarks'] as num?)?.toInt() ?? 100,
         dailyHours: (json['dailyHours'] as num?)?.toDouble() ?? 1.0,
         createdAt: DateTime.parse(json['createdAt'] as String),
+        photoPath: json['photoPath'] as String?,
       );
 }
