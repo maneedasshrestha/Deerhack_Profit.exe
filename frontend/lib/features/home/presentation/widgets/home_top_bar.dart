@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui_kit.dart';
+import '../../application/study_providers.dart';
 import '../../domain/mock_data.dart';
 import '../../domain/plan_data.dart';
 import '../screens/profile_screen.dart';
@@ -9,7 +11,7 @@ import '../screens/profile_screen.dart';
 /// Slim top bar: wordmark + streak on the left, the account section on the
 /// right — a compact "D-day" exam countdown and the avatar, both opening the
 /// profile. No stat-pill clutter.
-class HomeTopBar extends StatelessWidget {
+class HomeTopBar extends ConsumerWidget {
   const HomeTopBar({super.key});
 
   void _openProfile(BuildContext context) {
@@ -19,9 +21,10 @@ class HomeTopBar extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
     final text = Theme.of(context).textTheme;
+    final streak = ref.watch(streakProvider);
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 10, 16, 10),
       decoration: BoxDecoration(
@@ -40,10 +43,18 @@ class HomeTopBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          TagChip(
-            label: '${MockData.streak}',
-            icon: Icons.local_fire_department_rounded,
-            color: const Color(0xFFF97316),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 280),
+            transitionBuilder: (child, anim) => ScaleTransition(
+              scale: anim,
+              child: FadeTransition(opacity: anim, child: child),
+            ),
+            child: TagChip(
+              key: ValueKey(streak),
+              label: '$streak',
+              icon: Icons.local_fire_department_rounded,
+              color: const Color(0xFFF97316),
+            ),
           ),
           const Spacer(),
           // Account section: "D-day" countdown + avatar → profile.
