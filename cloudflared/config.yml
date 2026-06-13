@@ -11,10 +11,10 @@
 #   3. Replace the hostname with your real public hostname.
 # The credentials json is gitignored — do not commit it.
 
-tunnel: deerhack-tunnel
-credentials-file: /etc/cloudflared/<TUNNEL-ID>.json
+tunnel: a763429a-7806-4784-a041-44de49d345d6
+credentials-file: /etc/cloudflared/a763429a-7806-4784-a041-44de49d345d6.json
 
 ingress:
-  - hostname: your-app.example.com
+  - hostname: api.singhdipesh.com.np
     service: http://backend:8787
   - service: http_status:404
