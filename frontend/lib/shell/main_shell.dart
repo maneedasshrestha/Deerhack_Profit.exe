@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../features/duel/presentation/screens/duel_screen.dart';
 import '../features/feynman/presentation/screens/concept_setup_screen.dart';

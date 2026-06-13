@@ -31,9 +31,9 @@ final appConfigProvider = Provider<AppConfig>(
     // Android emulator reaches the host machine at 10.0.2.2.
     // iOS simulator / desktop: use http://localhost:8787.
     proxyBaseUrl: 'http://10.0.2.2:8787',
-    // Using the local Ollama-backed proxy. Set to true to run fully offline
-    // against the heuristic MockStudentEngine (no backend needed).
-    useMockEngine: false,
+    // Running fully offline against the heuristic MockStudentEngine and the
+    // local MockPlanService (no backend needed). Set to false to hit the proxy.
+    useMockEngine: true,
   ),
 );
 
