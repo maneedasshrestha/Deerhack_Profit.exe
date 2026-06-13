@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui_kit.dart';
+import '../../../onboarding/application/auth_providers.dart';
 import '../../../onboarding/application/onboarding_providers.dart';
 import '../../../onboarding/presentation/widgets/profile_avatar.dart';
 import '../../application/study_providers.dart';
@@ -28,8 +29,10 @@ class HomeTopBar extends ConsumerWidget {
     final text = Theme.of(context).textTheme;
     final streak = ref.watch(streakProvider);
     final profile = ref.watch(userProfileProvider);
-    final name = profile?.fullName ?? MockData.userName;
-    final initials = profile?.initials ?? name[0];
+    // Photo precedence mirrors the profile screen: uploaded photo, else the
+    // signed-in Google avatar, else gradient-initials.
+    final photoPath = profile?.photoPath ?? ref.watch(signedInAvatarUrlProvider);
+    final initials = profile?.initials ?? MockData.userName[0];
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 10, 16, 10),
       decoration: BoxDecoration(
@@ -77,7 +80,7 @@ class HomeTopBar extends ConsumerWidget {
                   ),
                   child: ProfileAvatar(
                     initials: initials,
-                    photoPath: profile?.photoPath,
+                    photoPath: photoPath,
                     size: 32,
                   ),
                 ),
@@ -93,14 +96,16 @@ class HomeTopBar extends ConsumerWidget {
 /// The "D-day" exam countdown: a compact pill reading `D-101`. The colour warms
 /// from the calm accent to amber, then red, as the exam closes in — turning the
 /// badge into a low-key urgency cue.
-class _DDayBadge extends StatelessWidget {
+class _DDayBadge extends ConsumerWidget {
   const _DDayBadge();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
     final text = Theme.of(context).textTheme;
-    final days = PlanData.daysToExam;
+    // Count down to the exam the learner chose at onboarding.
+    final days =
+        ref.watch(userProfileProvider)?.daysToExam() ?? PlanData.daysToExam;
 
     final Color color;
     if (days <= 7) {

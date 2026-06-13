@@ -2,28 +2,62 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui_kit.dart';
+import '../../application/weekly_mock_providers.dart';
+import '../../domain/ioe_exam.dart';
 import '../../domain/mock_data.dart';
-import '../../domain/plan_data.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// MockTestScreen — Sunday's reflection. Exam conditions: one global timer, no
-// feedback until the end, per-question time tracked. The result decides what
-// next week's plan reinforces.
+// MockTestScreen — the end-of-week quiz, sat as an exact replica of the IOE
+// entrance exam. A full question set is pulled from Supabase and run under the
+// real paper's rules: one global timer scaled to the IOE per-mark pace (a full
+// 140-mark paper = 2 hours), no per-question feedback, no negative marking,
+// scored in marks. The result drafts what next week's plan reinforces.
+//
+// This widget only handles loading the paper; [_MockTestRunner] runs it.
 // ═══════════════════════════════════════════════════════════════════════════
-class MockTestScreen extends StatefulWidget {
-  const MockTestScreen({super.key});
+class MockTestScreen extends ConsumerWidget {
+  const MockTestScreen({super.key, this.weekNumber = 1, this.onCompleted});
+
+  /// Which week's paper to sit — rotates the Supabase set so consecutive weekly
+  /// mocks aren't the same exam.
+  final int weekNumber;
+
+  /// Called once the mock is submitted and dismissed — marks the Sunday node
+  /// done on the week map.
+  final VoidCallback? onCompleted;
 
   @override
-  State<MockTestScreen> createState() => _MockTestScreenState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final exam = ref.watch(weeklyMockExamProvider(weekNumber));
+    return exam.when(
+      data: (exam) => _MockTestRunner(exam: exam, onCompleted: onCompleted),
+      loading: () => const _LoadingView(),
+      error: (_, _) => _ErrorView(
+        onRetry: () => ref.invalidate(weeklyMockExamProvider(weekNumber)),
+        onClose: () => Navigator.of(context).pop(),
+      ),
+    );
+  }
+}
+
+class _MockTestRunner extends StatefulWidget {
+  const _MockTestRunner({required this.exam, this.onCompleted});
+
+  final WeeklyMockExam exam;
+  final VoidCallback? onCompleted;
+
+  @override
+  State<_MockTestRunner> createState() => _MockTestRunnerState();
 }
 
 enum _Stage { intro, running, results }
 
-class _MockTestScreenState extends State<MockTestScreen> {
-  late final List<MockQuestion> _questions = PlanData.mockTestQuestions;
+class _MockTestRunnerState extends State<_MockTestRunner> {
+  List<MockQuestion> get _questions => widget.exam.questions;
   _Stage _stage = _Stage.intro;
 
   int _qIndex = 0;
@@ -40,7 +74,7 @@ class _MockTestScreenState extends State<MockTestScreen> {
     super.initState();
     _answers = List.filled(_questions.length, null);
     _secondsPerQuestion = List.filled(_questions.length, 0);
-    _remaining = PlanData.mockTestDuration.inSeconds;
+    _remaining = widget.exam.duration.inSeconds;
   }
 
   @override
@@ -81,6 +115,16 @@ class _MockTestScreenState extends State<MockTestScreen> {
     });
   }
 
+  void _prev() {
+    if (_qIndex == 0) return;
+    _answers[_qIndex] = _selected;
+    _recordCurrentTiming();
+    setState(() {
+      _qIndex--;
+      _selected = _answers[_qIndex];
+    });
+  }
+
   void _finish() {
     _ticker?.cancel();
     _questionWatch.stop();
@@ -89,13 +133,7 @@ class _MockTestScreenState extends State<MockTestScreen> {
     setState(() => _stage = _Stage.results);
   }
 
-  int get _score {
-    var s = 0;
-    for (var i = 0; i < _questions.length; i++) {
-      if (_answers[i] == _questions[i].correctIndex) s++;
-    }
-    return s;
-  }
+  int get _score => widget.exam.scoreFor(_answers);
 
   /// Subjects ranked by number of wrong/blank answers — the weak points that
   /// seed next week's plan.
@@ -115,7 +153,7 @@ class _MockTestScreenState extends State<MockTestScreen> {
   Widget build(BuildContext context) {
     return switch (_stage) {
       _Stage.intro => _IntroView(
-          questionCount: PlanData.mockTestQuestionCount,
+          exam: widget.exam,
           onStart: _start,
           onClose: () => Navigator.of(context).pop(),
         ),
@@ -125,8 +163,12 @@ class _MockTestScreenState extends State<MockTestScreen> {
           answers: _answers,
           secondsPerQuestion: _secondsPerQuestion,
           score: _score,
+          totalMarks: widget.exam.totalMarks,
           weakSubjects: _weakSubjects,
-          onFinish: () => Navigator.of(context).pop(),
+          onFinish: () {
+            widget.onCompleted?.call();
+            Navigator.of(context).pop();
+          },
         ),
     };
   }
@@ -136,8 +178,11 @@ class _MockTestScreenState extends State<MockTestScreen> {
     final text = Theme.of(context).textTheme;
     final q = _questions[_qIndex];
     final low = _remaining <= 60;
-    final mm = (_remaining ~/ 60).toString().padLeft(2, '0');
+    final hh = (_remaining ~/ 3600);
+    final mm = ((_remaining % 3600) ~/ 60).toString().padLeft(2, '0');
     final ss = (_remaining % 60).toString().padLeft(2, '0');
+    final clock = hh > 0 ? '$hh:$mm:$ss' : '$mm:$ss';
+    final isLast = _qIndex >= _questions.length - 1;
 
     return Scaffold(
       backgroundColor: p.bg,
@@ -152,6 +197,11 @@ class _MockTestScreenState extends State<MockTestScreen> {
                     'Question ${_qIndex + 1} of ${_questions.length}',
                     style:
                         text.labelMedium?.copyWith(color: p.textTertiary),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '· ${q.marks} ${q.marks == 1 ? 'mark' : 'marks'}',
+                    style: text.labelMedium?.copyWith(color: p.textTertiary),
                   ),
                   const Spacer(),
                   AnimatedContainer(
@@ -173,7 +223,7 @@ class _MockTestScreenState extends State<MockTestScreen> {
                                 : p.textSecondary),
                         const SizedBox(width: 5),
                         Text(
-                          '$mm:$ss',
+                          clock,
                           style: text.labelLarge?.copyWith(
                             color: low
                                 ? const Color(0xFFE11D48)
@@ -190,28 +240,18 @@ class _MockTestScreenState extends State<MockTestScreen> {
                 ],
               ),
             ),
-            // Progress dots
+            // Single progress bar — a per-question dot row doesn't fit a
+            // full ~100-question paper.
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-              child: Row(
-                children: [
-                  for (var i = 0; i < _questions.length; i++)
-                    Expanded(
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 250),
-                        height: 5,
-                        margin: const EdgeInsets.symmetric(horizontal: 2),
-                        decoration: BoxDecoration(
-                          color: i < _qIndex
-                              ? p.accent
-                              : i == _qIndex
-                                  ? p.accent.withValues(alpha: 0.55)
-                                  : p.surfaceHigh,
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                      ),
-                    ),
-                ],
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(3),
+                child: LinearProgressIndicator(
+                  value: (_qIndex + 1) / _questions.length,
+                  minHeight: 5,
+                  backgroundColor: p.surfaceHigh,
+                  valueColor: AlwaysStoppedAnimation(p.accent),
+                ),
               ),
             ),
             Expanded(
@@ -247,54 +287,56 @@ class _MockTestScreenState extends State<MockTestScreen> {
                         ),
                       ),
                       const SizedBox(height: 18),
-                      for (var i = 0; i < q.options.length; i++) ...[
-                        Pressable(
-                          onTap: () => setState(() => _selected = i),
-                          scale: 0.98,
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 160),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 13),
-                            decoration: BoxDecoration(
-                              color: _selected == i ? p.accentSoft : p.surface,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
+                      for (var i = 0; i < q.options.length; i++)
+                        if (q.options[i].isNotEmpty) ...[
+                          Pressable(
+                            onTap: () => setState(() => _selected = i),
+                            scale: 0.98,
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 160),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 13),
+                              decoration: BoxDecoration(
                                 color:
-                                    _selected == i ? p.accent : p.hairline,
-                                width: _selected == i ? 2 : 1,
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Text(
-                                  String.fromCharCode(65 + i),
-                                  style: text.labelLarge?.copyWith(
-                                    color: _selected == i
-                                        ? p.accent
-                                        : p.textTertiary,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                                    _selected == i ? p.accentSoft : p.surface,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color:
+                                      _selected == i ? p.accent : p.hairline,
+                                  width: _selected == i ? 2 : 1,
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    q.options[i],
-                                    style: text.bodyMedium?.copyWith(
+                              ),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    String.fromCharCode(65 + i),
+                                    style: text.labelLarge?.copyWith(
                                       color: _selected == i
                                           ? p.accent
-                                          : p.textPrimary,
-                                      fontWeight: _selected == i
-                                          ? FontWeight.w600
-                                          : null,
+                                          : p.textTertiary,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      q.options[i],
+                                      style: text.bodyMedium?.copyWith(
+                                        color: _selected == i
+                                            ? p.accent
+                                            : p.textPrimary,
+                                        fontWeight: _selected == i
+                                            ? FontWeight.w600
+                                            : null,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 10),
-                      ],
+                          const SizedBox(height: 10),
+                        ],
                     ],
                   ),
                 ),
@@ -302,11 +344,26 @@ class _MockTestScreenState extends State<MockTestScreen> {
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
-              child: AppButton(
-                label: _qIndex >= _questions.length - 1
-                    ? 'Submit test'
-                    : 'Next question',
-                onTap: _selected == null ? null : _next,
+              child: Row(
+                children: [
+                  if (_qIndex > 0) ...[
+                    _NavButton(
+                      icon: Icons.arrow_back_rounded,
+                      onTap: _prev,
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                  Expanded(
+                    // Skipping is allowed — no negative marking — so this is
+                    // always enabled, even with nothing selected.
+                    child: AppButton(
+                      label: isLast
+                          ? 'Submit test'
+                          : (_selected == null ? 'Skip' : 'Next question'),
+                      onTap: _next,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -316,15 +373,113 @@ class _MockTestScreenState extends State<MockTestScreen> {
   }
 }
 
+class _NavButton extends StatelessWidget {
+  const _NavButton({required this.icon, required this.onTap});
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Pressable(
+      onTap: onTap,
+      scale: 0.96,
+      child: Container(
+        width: 54,
+        height: 54,
+        decoration: BoxDecoration(
+          color: p.surfaceHigh,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: p.hairline),
+        ),
+        child: Icon(icon, color: p.textSecondary),
+      ),
+    );
+  }
+}
+
+// ─── Loading / error ───────────────────────────────────────────────────────────
+class _LoadingView extends StatelessWidget {
+  const _LoadingView();
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    return Scaffold(
+      backgroundColor: p.bg,
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(color: p.accent),
+            const SizedBox(height: 18),
+            Text('Loading your exam paper…',
+                style: text.bodyMedium?.copyWith(color: p.textSecondary)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorView extends StatelessWidget {
+  const _ErrorView({required this.onRetry, required this.onClose});
+  final VoidCallback onRetry;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    return Scaffold(
+      backgroundColor: p.bg,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              Align(
+                alignment: Alignment.centerRight,
+                child: IconButton(
+                  onPressed: onClose,
+                  icon: Icon(Icons.close_rounded, color: p.textSecondary),
+                ),
+              ),
+              const Spacer(),
+              Icon(Icons.cloud_off_rounded, size: 48, color: p.textTertiary),
+              const SizedBox(height: 16),
+              Text("Couldn't load the paper",
+                  style: text.headlineSmall, textAlign: TextAlign.center),
+              const SizedBox(height: 8),
+              Text(
+                'Check your connection and try again.',
+                style: text.bodyMedium?.copyWith(color: p.textSecondary),
+                textAlign: TextAlign.center,
+              ),
+              const Spacer(),
+              AppButton(
+                  label: 'Try again',
+                  icon: Icons.refresh_rounded,
+                  onTap: onRetry),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ─── Intro ────────────────────────────────────────────────────────────────────
 class _IntroView extends StatelessWidget {
   const _IntroView({
-    required this.questionCount,
+    required this.exam,
     required this.onStart,
     required this.onClose,
   });
 
-  final int questionCount;
+  final WeeklyMockExam exam;
   final VoidCallback onStart;
   final VoidCallback onClose;
 
@@ -332,7 +487,7 @@ class _IntroView extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final text = Theme.of(context).textTheme;
-    final minutes = PlanData.mockTestDuration.inMinutes;
+    final minutes = exam.duration.inMinutes;
 
     return Scaffold(
       backgroundColor: p.bg,
@@ -365,15 +520,15 @@ class _IntroView extends StatelessWidget {
               const SizedBox(height: 20),
               StaggeredEntrance(
                 index: 1,
-                child:
-                    Text('Weekly mock test', style: text.displayMedium),
+                child: Text('Weekly mock test', style: text.displayMedium),
               ),
               const SizedBox(height: 10),
               StaggeredEntrance(
                 index: 2,
                 child: Text(
-                  'This is the reflection of your week — did the weak points '
-                  'you trained actually close? Real exam rules apply.',
+                  'A full IOE entrance paper under real exam conditions — same '
+                  'time pressure, same rules. This is the reflection of your '
+                  'week: did the weak points you trained actually close?',
                   style: text.bodyMedium?.copyWith(height: 1.5),
                 ),
               ),
@@ -385,7 +540,13 @@ class _IntroView extends StatelessWidget {
                     children: [
                       _Rule(
                         icon: Icons.timer_outlined,
-                        label: '$minutes minutes · $questionCount questions',
+                        label: '$minutes minutes · ${exam.questionCount} '
+                            'questions · ${exam.totalMarks} marks',
+                      ),
+                      const SizedBox(height: 12),
+                      const _Rule(
+                        icon: Icons.remove_circle_outline_rounded,
+                        label: 'No negative marking — never leave a blank',
                       ),
                       const SizedBox(height: 12),
                       const _Rule(
@@ -446,6 +607,7 @@ class _ResultsView extends StatelessWidget {
     required this.answers,
     required this.secondsPerQuestion,
     required this.score,
+    required this.totalMarks,
     required this.weakSubjects,
     required this.onFinish,
   });
@@ -453,7 +615,10 @@ class _ResultsView extends StatelessWidget {
   final List<MockQuestion> questions;
   final List<int?> answers;
   final List<int> secondsPerQuestion;
+
+  /// Marks scored, out of [totalMarks].
   final int score;
+  final int totalMarks;
   final List<String> weakSubjects;
   final VoidCallback onFinish;
 
@@ -461,7 +626,7 @@ class _ResultsView extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final text = Theme.of(context).textTheme;
-    final pct = questions.isEmpty ? 0 : (score * 100) ~/ questions.length;
+    final pct = totalMarks == 0 ? 0 : (score * 100) ~/ totalMarks;
     final maxSeconds = secondsPerQuestion
         .fold<int>(1, (m, s) => s > m ? s : m);
     final avgSeconds = secondsPerQuestion.isEmpty
@@ -499,7 +664,7 @@ class _ResultsView extends StatelessWidget {
                                   Text('$pct%',
                                       style: text.displayMedium
                                           ?.copyWith(fontSize: 32)),
-                                  Text('$score/${questions.length}',
+                                  Text('$score/$totalMarks',
                                       style: text.labelSmall),
                                 ],
                               ),
@@ -509,7 +674,8 @@ class _ResultsView extends StatelessWidget {
                           Text('Test submitted', style: text.headlineSmall),
                           const SizedBox(height: 4),
                           Text(
-                            'Average ${avgSeconds}s per question',
+                            '$score of $totalMarks marks · '
+                            'avg ${avgSeconds}s per question',
                             style: text.labelMedium
                                 ?.copyWith(color: p.textTertiary),
                           ),
@@ -572,9 +738,8 @@ class _ResultsView extends StatelessWidget {
                               ),
                               const SizedBox(height: 10),
                               Text(
-                                'Week ${PlanData.nextWeekNumber} will weight '
-                                'its daily levels toward these subjects and '
-                                're-test them next Sunday.',
+                                'Next week will weight its daily levels toward '
+                                'these subjects and re-test them next Sunday.',
                                 style: text.bodyMedium?.copyWith(height: 1.5),
                               ),
                             ],

@@ -110,6 +110,10 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
     setState(() {
       _account = account;
       _nameCtrl.text = account.name;
+      // Seed the avatar with the Google account photo (a remote URL). The learner
+      // can still replace or remove it; if they don't, it becomes their profile
+      // picture and is shown everywhere ProfileAvatar appears.
+      _photoPath = account.photoUrl;
       _step = 0;
     });
     // A fresh sign-in always starts at the first step.

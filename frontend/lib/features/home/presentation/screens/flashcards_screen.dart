@@ -11,7 +11,10 @@ import '../../domain/plan_data.dart';
 // spaced repetition — fast, tactile, satisfying.
 // ═══════════════════════════════════════════════════════════════════════════
 class FlashcardsScreen extends StatefulWidget {
-  const FlashcardsScreen({super.key});
+  const FlashcardsScreen({super.key, this.onCompleted});
+
+  /// Called when the deck is finished — lets the week map mark the bonus done.
+  final VoidCallback? onCompleted;
 
   @override
   State<FlashcardsScreen> createState() => _FlashcardsScreenState();
@@ -112,7 +115,10 @@ class _FlashcardsScreenState extends State<FlashcardsScreen>
       return _DeckCompleteView(
         correct: _correct,
         total: _cards.length,
-        onFinish: () => Navigator.of(context).pop(),
+        onFinish: () {
+          widget.onCompleted?.call();
+          Navigator.of(context).pop();
+        },
       );
     }
 
