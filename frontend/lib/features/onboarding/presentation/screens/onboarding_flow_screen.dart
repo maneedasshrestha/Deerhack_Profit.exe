@@ -255,11 +255,24 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
     );
 
     HapticFeedback.mediumImpact();
+
+    // Push to the cloud (uploads the photo, upserts the profiles row, and
+    // rewrites photoPath to the public Storage URL). If anything fails we keep
+    // the local profile so the demo never dead-ends behind a flaky network.
+    var toSave = profile;
+    try {
+      toSave = await ref
+          .read(profileSyncProvider)
+          .persist(profile, userId: account.id);
+    } catch (e) {
+      debugPrint('Profile cloud sync failed, saving locally: $e');
+    }
+
     // Clear any plan from a previous profile FIRST so the gate lands on the
     // loading screen (and not briefly on a stale plan), then save the profile.
     await ref.read(curatedPlanProvider.notifier).clear();
     // Flips userProfileProvider non-null → FeynmanApp swaps to the plan loader.
-    await ref.read(userProfileProvider.notifier).complete(profile);
+    await ref.read(userProfileProvider.notifier).complete(toSave);
   }
 
   @override

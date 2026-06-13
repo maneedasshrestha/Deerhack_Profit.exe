@@ -40,6 +40,13 @@ dependencies:
   # gradient-initials avatar is used when no photo is chosen.
   image_picker: ^1.1.2
 
+  # Auth + database + storage. Native Google sign-in feeds an ID token into
+  # Supabase auth (signInWithIdToken); the profile row + avatar live in Supabase.
+  # google_sign_in pinned to 6.x: its signIn()/authentication API matches the
+  # documented Supabase native-Google flow (7.x renamed these to authenticate()).
+  supabase_flutter: ^2.8.0
+  google_sign_in: ^6.2.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

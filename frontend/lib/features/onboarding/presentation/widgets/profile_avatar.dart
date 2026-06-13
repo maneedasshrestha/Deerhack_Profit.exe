@@ -27,25 +27,29 @@ class ProfileAvatar extends StatelessWidget {
     end: Alignment.bottomRight,
   );
 
-  bool get _hasPhoto {
+  /// Resolves the photo to an ImageProvider: a remote Storage URL, a local file
+  /// that still exists, or null → fall back to the gradient-initials avatar.
+  ImageProvider? get _image {
     final p = photoPath;
-    return p != null && p.isNotEmpty && File(p).existsSync();
+    if (p == null || p.isEmpty) return null;
+    if (p.startsWith('http')) return NetworkImage(p);
+    return File(p).existsSync() ? FileImage(File(p)) : null;
   }
 
   @override
   Widget build(BuildContext context) {
-    final hasPhoto = _hasPhoto;
+    final image = _image;
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: hasPhoto ? null : _gradient,
-        image: hasPhoto
-            ? DecorationImage(image: FileImage(File(photoPath!)), fit: BoxFit.cover)
-            : null,
+        gradient: image == null ? _gradient : null,
+        image: image == null
+            ? null
+            : DecorationImage(image: image, fit: BoxFit.cover),
       ),
-      child: hasPhoto
+      child: image != null
           ? null
           : Center(
               child: Text(
