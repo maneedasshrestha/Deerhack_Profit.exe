@@ -39,25 +39,38 @@ class SupabaseProfileSyncService implements ProfileSyncService {
   @override
   Future<UserProfile> persist(UserProfile profile,
       {required String userId}) async {
-    final photoUrl = await _uploadPhotoIfLocal(profile.photoPath, userId);
-    final synced = profile.copyWith(photoPath: photoUrl);
+    // Avatar upload is best-effort: there is no column to store the URL yet, and
+    // a missing/unconfigured bucket must never block the onboarding row.
+    var synced = profile;
+    try {
+      final photoUrl = await _uploadPhotoIfLocal(profile.photoPath, userId);
+      synced = profile.copyWith(photoPath: photoUrl);
+    } catch (_) {
+      // Keep the local path; carry on writing the profile row.
+    }
 
+    // Mapped onto the real `profiles` schema. The table stores the exam label in
+    // `exam_type`, study time as `daily_minutes`, and a `date` (not timestamp)
+    // for `exam_date`.
     await _sb.from(_table).upsert({
       'id': userId,
       'full_name': synced.fullName,
       'email': synced.email,
-      'photo_url': synced.photoPath,
-      'exam_id': synced.examId,
-      'exam_name': synced.examName,
-      'exam_date': synced.examDate.toIso8601String(),
+      'exam_type': synced.examName,
+      'exam_date': _dateOnly(synced.examDate),
       'target_marks': synced.targetMarks,
-      'total_marks': synced.totalMarks,
-      'daily_hours': synced.dailyHours,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
+      'daily_minutes': (synced.dailyHours * 60).round(),
+      'onboarded_at': DateTime.now().toUtc().toIso8601String(),
     });
 
     return synced;
   }
+
+  /// `exam_date` is a SQL `date` column — send `YYYY-MM-DD`, not a timestamp.
+  static String _dateOnly(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
 
   /// Uploads a local file path to Storage and returns its public URL. Leaves
   /// existing URLs (already-remote) and missing files alone.

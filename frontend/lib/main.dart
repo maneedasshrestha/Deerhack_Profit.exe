@@ -10,6 +10,8 @@ import 'features/duel/application/duel_providers.dart';
 import 'features/duel/data/duel_identity.dart';
 import 'features/duel/data/supabase_duel_repository.dart';
 import 'features/feynman/application/providers.dart';
+import 'features/home/application/weekly_mock_providers.dart';
+import 'features/home/data/weekly_mock_repository.dart';
 import 'features/feynman/data/repository/session_repository.dart';
 import 'features/onboarding/application/auth_providers.dart';
 import 'features/onboarding/application/onboarding_providers.dart';
@@ -75,6 +77,9 @@ Future<void> main() async {
           // falls back to the in-memory repository (single-device).
           duelRepositoryProvider
               .overrideWithValue(const SupabaseDuelRepository()),
+          // The weekly mock pulls full IOE papers from the `questions` table.
+          weeklyMockRepositoryProvider
+              .overrideWithValue(const SupabaseWeeklyMockRepository()),
         ],
       ],
       child: const FeynmanApp(),
