@@ -52,115 +52,126 @@ class _QuestionTileState extends ConsumerState<QuestionTile> {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
-          child: IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Subject-coloured spine.
-                Container(width: 4, color: accent),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            TagChip(label: q.subject, color: accent),
-                            const Spacer(),
-                            Pressable(
-                              onTap: () => ref
-                                  .read(starredQuestionsProvider.notifier)
-                                  .toggle(q.id),
-                              child: Icon(
-                                starred
-                                    ? Icons.star_rounded
-                                    : Icons.star_border_rounded,
-                                size: 20,
-                                color: starred
-                                    ? const Color(0xFFF59E0B)
-                                    : p.textTertiary,
-                              ),
+          // A Stack (rather than an IntrinsicHeight Row) keeps the spine
+          // full-height without fighting the answer's collapse animation —
+          // IntrinsicHeight would snap to the collapsed height instantly while
+          // AnimatedSize is still shrinking, briefly overflowing the box.
+          child: Stack(
+            children: [
+              // Full-width so the tile fills its row — a Stack sizes to its
+              // non-positioned child, unlike the old Expanded.
+              SizedBox(
+                width: double.infinity,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 16, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          TagChip(label: q.subject, color: accent),
+                          const Spacer(),
+                          Pressable(
+                            onTap: () => ref
+                                .read(starredQuestionsProvider.notifier)
+                                .toggle(q.id),
+                            child: Icon(
+                              starred
+                                  ? Icons.star_rounded
+                                  : Icons.star_border_rounded,
+                              size: 20,
+                              color: starred
+                                  ? const Color(0xFFF59E0B)
+                                  : p.textTertiary,
                             ),
-                          ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        q.question,
+                        style: text.bodyMedium?.copyWith(
+                          color: p.textPrimary,
+                          height: 1.45,
                         ),
-                        const SizedBox(height: 10),
-                        Text(
-                          q.question,
-                          style: text.bodyMedium
-                              ?.copyWith(color: p.textPrimary, height: 1.45),
-                        ),
-                        AnimatedSize(
-                          duration: const Duration(milliseconds: 220),
-                          curve: Curves.easeOutCubic,
-                          alignment: Alignment.topCenter,
-                          child: !_open
-                              ? const SizedBox(width: double.infinity)
-                              : Padding(
-                                  padding: const EdgeInsets.only(top: 12),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          const Icon(
-                                              Icons.check_circle_rounded,
-                                              size: 16,
-                                              color: Color(0xFF059669)),
-                                          const SizedBox(width: 7),
-                                          Expanded(
-                                            child: Text(
-                                              q.options[q.correctIndex],
-                                              style: text.labelLarge?.copyWith(
-                                                color: const Color(0xFF059669),
-                                                fontWeight: FontWeight.w700,
-                                                height: 1.4,
-                                              ),
+                      ),
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOutCubic,
+                        alignment: Alignment.topCenter,
+                        child: !_open
+                            ? const SizedBox(width: double.infinity)
+                            : Padding(
+                                padding: const EdgeInsets.only(top: 12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Icon(
+                                          Icons.check_circle_rounded,
+                                          size: 16,
+                                          color: Color(0xFF059669),
+                                        ),
+                                        const SizedBox(width: 7),
+                                        Expanded(
+                                          child: Text(
+                                            q.options[q.correctIndex],
+                                            style: text.labelLarge?.copyWith(
+                                              color: const Color(0xFF059669),
+                                              fontWeight: FontWeight.w700,
+                                              height: 1.4,
                                             ),
                                           ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 7),
-                                      Text(
-                                        q.explanation,
-                                        style: text.labelMedium?.copyWith(
-                                          color: p.textSecondary,
-                                          height: 1.45,
                                         ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 7),
+                                    Text(
+                                      q.explanation,
+                                      style: text.labelMedium?.copyWith(
+                                        color: p.textSecondary,
+                                        height: 1.45,
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Icon(
-                              _open
-                                  ? Icons.keyboard_arrow_up_rounded
-                                  : Icons.keyboard_arrow_down_rounded,
-                              size: 16,
-                              color: accent,
-                            ),
-                            const SizedBox(width: 3),
-                            Text(
-                              _open ? 'Hide answer' : 'Show answer',
-                              style: text.labelSmall?.copyWith(
-                                color: accent,
-                                fontWeight: FontWeight.w600,
                               ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(
+                            _open
+                                ? Icons.keyboard_arrow_up_rounded
+                                : Icons.keyboard_arrow_down_rounded,
+                            size: 16,
+                            color: accent,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            _open ? 'Hide answer' : 'Show answer',
+                            style: text.labelSmall?.copyWith(
+                              color: accent,
+                              fontWeight: FontWeight.w600,
                             ),
-                          ],
-                        ),
-                      ],
-                    ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+              // Subject-coloured spine, full height of the tile.
+              Positioned(
+                top: 0,
+                bottom: 0,
+                left: 0,
+                child: Container(width: 4, color: accent),
+              ),
+            ],
           ),
         ),
       ),
@@ -323,13 +334,13 @@ class GradientHeroCard extends StatelessWidget {
   }
 
   Widget _circle(double size, double alpha) => Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: Colors.white.withValues(alpha: alpha),
-        ),
-      );
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      color: Colors.white.withValues(alpha: alpha),
+    ),
+  );
 }
 
 /// A translucent stat pill for use on the gradient hero headers.

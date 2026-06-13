@@ -28,9 +28,13 @@ class AppConfig {
 /// app is runnable out of the box.
 final appConfigProvider = Provider<AppConfig>(
   (ref) => const AppConfig(
-    // Android emulator reaches the host machine at 10.0.2.2.
-    // iOS simulator / desktop: use http://localhost:8787.
-    proxyBaseUrl: 'http://10.0.2.2:8787',
+    // Reaching the backend that runs on the dev Mac:
+    //   * Physical iPhone  → http://<your-Mac-LAN-IP>:8787  (phone + Mac on the
+    //                         same Wi-Fi). Current Mac IP below — UPDATE THIS if
+    //                         your network/IP changes (`ipconfig getifaddr en0`).
+    //   * Android emulator → http://10.0.2.2:8787
+    //   * iOS simulator / desktop → http://localhost:8787
+    proxyBaseUrl: 'http://192.168.102.25:8787',
     // Using the local Ollama-backed proxy. Set to true to run fully offline
     // against the heuristic MockStudentEngine (no backend needed).
     useMockEngine: false,
