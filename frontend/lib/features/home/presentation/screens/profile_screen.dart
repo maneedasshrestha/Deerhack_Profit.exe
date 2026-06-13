@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui_kit.dart';
+import '../../../onboarding/application/onboarding_providers.dart';
+import '../../../onboarding/application/plan_providers.dart';
+import '../../../onboarding/domain/curated_plan.dart';
 import '../../application/study_providers.dart';
 import '../../domain/mock_data.dart';
 import '../../domain/plan_data.dart';
@@ -53,6 +56,7 @@ class ProfileScreen extends ConsumerWidget {
                   const SliverToBoxAdapter(child: SizedBox(height: 16)),
                   const SliverToBoxAdapter(
                       child: StaggeredEntrance(child: _ProfileHeader())),
+                  const SliverToBoxAdapter(child: _CuratedPlanSection()),
                   const SliverToBoxAdapter(child: SectionHeader('Syllabus')),
                   const SliverToBoxAdapter(
                       child: StaggeredEntrance(
@@ -65,6 +69,10 @@ class ProfileScreen extends ConsumerWidget {
                   const SliverToBoxAdapter(
                       child: StaggeredEntrance(
                           index: 3, child: _StarredSection())),
+                  const SliverToBoxAdapter(child: SizedBox(height: 28)),
+                  const SliverToBoxAdapter(
+                      child: StaggeredEntrance(
+                          index: 4, child: _RestartOnboardingButton())),
                   const SliverToBoxAdapter(child: SizedBox(height: 40)),
                 ],
               ),
@@ -77,13 +85,21 @@ class ProfileScreen extends ConsumerWidget {
 }
 
 // ─── Header: who + how long to go. Nothing else. ──────────────────────────────
-class _ProfileHeader extends StatelessWidget {
+class _ProfileHeader extends ConsumerWidget {
   const _ProfileHeader();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
     final text = Theme.of(context).textTheme;
+    // The signed-up profile is the source of truth; static data is the fallback.
+    final profile = ref.watch(userProfileProvider);
+    final name = profile?.fullName ?? MockData.userName;
+    final initials = profile?.initials ??
+        name.split(' ').map((w) => w[0]).take(2).join();
+    final examName = profile?.examName ?? PlanData.examName;
+    final targetMarks = profile?.targetMarks ?? PlanData.targetMarks;
+    final days = profile?.daysToExam() ?? PlanData.daysToExam;
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
       child: Row(
@@ -101,7 +117,7 @@ class _ProfileHeader extends StatelessWidget {
             ),
             child: Center(
               child: Text(
-                MockData.userName.split(' ').map((w) => w[0]).take(2).join(),
+                initials,
                 style: text.headlineSmall?.copyWith(
                     color: Colors.white, fontWeight: FontWeight.w700),
               ),
@@ -112,10 +128,10 @@ class _ProfileHeader extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(MockData.userName, style: text.headlineSmall),
+                Text(name, style: text.headlineSmall),
                 const SizedBox(height: 3),
                 Text(
-                  '${PlanData.examName} · target ${PlanData.targetMarks} marks',
+                  '$examName · target $targetMarks marks',
                   style: text.labelMedium?.copyWith(color: p.textTertiary),
                 ),
               ],
@@ -131,7 +147,7 @@ class _ProfileHeader extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  '${PlanData.daysToExam}',
+                  '$days',
                   style: text.labelLarge
                       ?.copyWith(fontWeight: FontWeight.w800, height: 1),
                 ),
@@ -564,6 +580,290 @@ class _StarredTileState extends ConsumerState<_StarredTile> {
               style: text.labelSmall?.copyWith(color: p.textTertiary),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Curated plan: the strategy the backend built from the profile ───────────
+class _CuratedPlanSection extends ConsumerWidget {
+  const _CuratedPlanSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final plan = ref.watch(curatedPlanProvider);
+    if (plan == null) return const SizedBox.shrink();
+
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+
+    return Column(
+      children: [
+        const SectionHeader('Your plan'),
+        StaggeredEntrance(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: AppCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Summary + headline numbers.
+                  Text(plan.summary,
+                      style: text.bodyMedium
+                          ?.copyWith(color: p.textSecondary, height: 1.5)),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      _PlanStat(
+                          value: '${plan.totalWeeks}',
+                          label: plan.totalWeeks == 1 ? 'week' : 'weeks'),
+                      const SizedBox(width: 12),
+                      _PlanStat(
+                          value: _fmtHours(plan.weeklyHours),
+                          label: 'hrs / week'),
+                    ],
+                  ),
+
+                  // Focus areas.
+                  if (plan.focusAreas.isNotEmpty) ...[
+                    const SizedBox(height: 18),
+                    Text('Focus',
+                        style: text.labelMedium?.copyWith(
+                            color: p.textTertiary,
+                            fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (final f in plan.focusAreas)
+                          TagChip(label: f, color: p.accent),
+                      ],
+                    ),
+                  ],
+
+                  // Subject weighting.
+                  if (plan.subjectFocus.isNotEmpty) ...[
+                    const SizedBox(height: 18),
+                    Text('Subjects',
+                        style: text.labelMedium?.copyWith(
+                            color: p.textTertiary,
+                            fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 10),
+                    for (var i = 0; i < plan.subjectFocus.length; i++) ...[
+                      _SubjectWeightRow(focus: plan.subjectFocus[i]),
+                      if (i < plan.subjectFocus.length - 1)
+                        const SizedBox(height: 12),
+                    ],
+                  ],
+
+                  // Milestones.
+                  if (plan.milestones.isNotEmpty) ...[
+                    const SizedBox(height: 18),
+                    Text('Milestones',
+                        style: text.labelMedium?.copyWith(
+                            color: p.textTertiary,
+                            fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 10),
+                    for (final m in plan.milestones)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _MilestoneRow(milestone: m),
+                      ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  static String _fmtHours(double v) =>
+      v % 1 == 0 ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
+}
+
+class _PlanStat extends StatelessWidget {
+  const _PlanStat({required this.value, required this.label});
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: p.surfaceHigh,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          children: [
+            Text(value,
+                style: text.headlineSmall?.copyWith(
+                    color: p.accent, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 2),
+            Text(label,
+                style: text.labelSmall?.copyWith(color: p.textTertiary)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SubjectWeightRow extends StatelessWidget {
+  const _SubjectWeightRow({required this.focus});
+  final SubjectFocus focus;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+                child: Text(focus.subject,
+                    style:
+                        text.labelLarge?.copyWith(fontWeight: FontWeight.w600))),
+            Text('${focus.weight}%',
+                style: text.labelMedium?.copyWith(
+                    color: p.accent, fontWeight: FontWeight.w700)),
+          ],
+        ),
+        const SizedBox(height: 5),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: (focus.weight / 100).clamp(0.0, 1.0),
+            minHeight: 6,
+            backgroundColor: p.surfaceHigh,
+            valueColor: AlwaysStoppedAnimation(p.accent),
+          ),
+        ),
+        if (focus.note.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(focus.note,
+              style: text.labelSmall?.copyWith(color: p.textTertiary)),
+        ],
+      ],
+    );
+  }
+}
+
+class _MilestoneRow extends StatelessWidget {
+  const _MilestoneRow({required this.milestone});
+  final PlanMilestone milestone;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(top: 5),
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(shape: BoxShape.circle, color: p.accent),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  if (milestone.phase.isNotEmpty) ...[
+                    Text(milestone.phase,
+                        style: text.labelSmall?.copyWith(
+                            color: p.textTertiary,
+                            fontWeight: FontWeight.w700)),
+                    const SizedBox(width: 8),
+                  ],
+                  Flexible(
+                    child: Text(milestone.theme,
+                        style: text.labelLarge
+                            ?.copyWith(fontWeight: FontWeight.w600)),
+                  ),
+                ],
+              ),
+              if (milestone.detail.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(milestone.detail,
+                    style: text.labelMedium
+                        ?.copyWith(color: p.textTertiary, height: 1.4)),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Restart onboarding: clears the profile and returns to signup ─────────────
+class _RestartOnboardingButton extends ConsumerWidget {
+  const _RestartOnboardingButton();
+
+  Future<void> _confirmAndReset(BuildContext context, WidgetRef ref) async {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: p.surface,
+        title: Text('Restart onboarding?', style: text.titleMedium),
+        content: Text(
+          'This clears your saved details and takes you back through signup.',
+          style: text.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('Cancel', style: TextStyle(color: p.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('Restart', style: TextStyle(color: p.accent)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    // Drop the curated plan too, so re-onboarding regenerates it. Clearing the
+    // profile flips userProfileProvider null → FeynmanApp rebuilds straight into
+    // the onboarding flow, so this screen disappears with it.
+    await ref.read(curatedPlanProvider.notifier).clear();
+    await ref.read(userProfileProvider.notifier).reset();
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    return Center(
+      child: Pressable(
+        onTap: () => _confirmAndReset(context, ref),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.restart_alt_rounded, size: 17, color: p.textTertiary),
+              const SizedBox(width: 6),
+              Text('Restart onboarding',
+                  style: text.labelMedium?.copyWith(color: p.textTertiary)),
+            ],
+          ),
         ),
       ),
     );

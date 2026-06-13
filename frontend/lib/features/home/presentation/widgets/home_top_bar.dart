@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui_kit.dart';
+import '../../../onboarding/application/onboarding_providers.dart';
 import '../../domain/mock_data.dart';
 import '../../domain/plan_data.dart';
 import '../screens/profile_screen.dart';
@@ -9,7 +11,7 @@ import '../screens/profile_screen.dart';
 /// Slim top bar: wordmark + streak on the left, the account section on the
 /// right — a compact exam-countdown ring and the avatar, both opening the
 /// profile. No stat-pill clutter.
-class HomeTopBar extends StatelessWidget {
+class HomeTopBar extends ConsumerWidget {
   const HomeTopBar({super.key});
 
   void _openProfile(BuildContext context) {
@@ -19,9 +21,13 @@ class HomeTopBar extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
     final text = Theme.of(context).textTheme;
+    // The signed-up profile drives the avatar initial; falls back to mock data
+    // if somehow absent.
+    final profile = ref.watch(userProfileProvider);
+    final avatarLetter = profile?.initials.substring(0, 1) ?? MockData.userName[0];
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 10, 16, 10),
       decoration: BoxDecoration(
@@ -51,7 +57,8 @@ class HomeTopBar extends StatelessWidget {
             onTap: () => _openProfile(context),
             child: Row(
               children: [
-                ExamCountdownRing(size: 40),
+                ExamCountdownRing(
+                    size: 40, daysToExam: profile?.daysToExam()),
                 const SizedBox(width: 10),
                 Container(
                   padding: const EdgeInsets.all(2),
@@ -63,7 +70,7 @@ class HomeTopBar extends StatelessWidget {
                     radius: 16,
                     backgroundColor: p.accentSoft,
                     child: Text(
-                      MockData.userName[0],
+                      avatarLetter,
                       style: text.labelLarge?.copyWith(
                         color: p.accent,
                         fontWeight: FontWeight.w800,
@@ -83,9 +90,12 @@ class HomeTopBar extends StatelessWidget {
 /// Days-to-exam at a glance: a ring that fills as prep weeks pass, with the
 /// remaining day count in the middle.
 class ExamCountdownRing extends StatelessWidget {
-  const ExamCountdownRing({super.key, this.size = 40});
+  const ExamCountdownRing({super.key, this.size = 40, this.daysToExam});
 
   final double size;
+
+  /// Live days from the signed-up profile; falls back to the static plan value.
+  final int? daysToExam;
 
   @override
   Widget build(BuildContext context) {
@@ -93,6 +103,7 @@ class ExamCountdownRing extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     const week = PlanData.currentWeek;
     final elapsed = (week.weekNumber - 1) / week.totalWeeks;
+    final days = daysToExam ?? PlanData.daysToExam;
 
     return ProgressRing(
       progress: elapsed,
@@ -103,7 +114,7 @@ class ExamCountdownRing extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            '${PlanData.daysToExam}',
+            '$days',
             style: text.labelMedium?.copyWith(
               color: p.textPrimary,
               fontWeight: FontWeight.w800,
