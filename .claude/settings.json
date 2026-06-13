@@ -9,7 +9,14 @@
       "Bash(file lib/assets/logo.png)",
       "Bash(python -c \"from PIL import Image; print\\(Image.open\\('lib/assets/logo.png'\\).size\\)\")",
       "Bash(dart format *)",
-      "Bash(dart analyze *)"
+      "Bash(dart analyze *)",
+      "Bash(grep -r \"applicationId\" android/app/build.gradle*)",
+      "Bash(ls android/app/google-services.json)",
+      "Bash(./gradlew signingReport)",
+      "Bash(flutter config *)",
+      "Bash(flutter doctor *)",
+      "Read(//c/Users/shres/.android/**)",
+      "Bash(\"/c/Program Files/Android/Android Studio/jbr/bin/keytool\" -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android)"
     ]
   }
 }

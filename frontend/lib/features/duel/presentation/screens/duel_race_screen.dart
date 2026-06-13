@@ -2,63 +2,103 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui_kit.dart';
 import '../../../home/domain/mock_data.dart';
-import '../../../home/domain/plan_data.dart';
+import '../../application/duel_providers.dart';
+import '../../domain/duel_invite.dart';
+import '../../domain/duel_match.dart';
+import '../../domain/duel_player.dart';
+import '../../domain/duel_questions.dart';
+import '../widgets/invite_qr_code.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// DuelRaceScreen — mock head-to-head. Both players get the same questions;
-// you answer for real, the opponent answers on a simulated schedule. Instant
-// right/wrong feedback, auto-advance, fastest-correct energy throughout.
-// (POC: the opponent is scripted — swap for the realtime backend later.)
+// DuelRaceScreen — async head-to-head. Two roles share this screen:
+//
+//   • Challenger (.challenge): plays a fresh run to "set the pace". On finish
+//     the run is published as a challenge (a code + QR a friend can scan to try
+//     to beat it).
+//   • Opponent (.accept): plays a duel loaded by code, racing the challenger's
+//     recorded run as a "ghost". On finish the result is submitted and the
+//     winner is computed.
+//
+// You always answer for real; the opponent track replays the challenger's
+// stored per-question correctness, so the fastest-correct energy is preserved.
 // ═══════════════════════════════════════════════════════════════════════════
-class DuelRaceScreen extends StatefulWidget {
-  const DuelRaceScreen({
-    super.key,
-    this.opponentName = 'Priya Shah',
-  });
+class DuelRaceScreen extends ConsumerStatefulWidget {
+  /// Play a fresh run and publish it as a challenge. [target], when set, sends
+  /// the challenge to a specific player's inbox instead of an open pool.
+  const DuelRaceScreen.challenge({super.key, this.target}) : duel = null;
 
-  final String opponentName;
+  /// Play an existing challenge as the opponent.
+  const DuelRaceScreen.accept({super.key, required DuelMatch this.duel})
+      : target = null;
+
+  final DuelPlayer? target;
+  final DuelMatch? duel;
+
+  bool get isChallenger => duel == null;
 
   @override
-  State<DuelRaceScreen> createState() => _DuelRaceScreenState();
+  ConsumerState<DuelRaceScreen> createState() => _DuelRaceScreenState();
 }
 
-class _DuelRaceScreenState extends State<DuelRaceScreen> {
-  late final List<MockQuestion> _questions =
-      PlanData.mockTestQuestions.take(5).toList();
+class _DuelRaceScreenState extends ConsumerState<DuelRaceScreen> {
+  late final String _topic;
+  late final List<String> _questionIds;
+  late final List<MockQuestion> _questions;
 
-  // Scripted opponent: answers one question every few seconds with this
-  // right/wrong pattern. Tuned so a decent run is a close match.
-  static const _oppPattern = [true, false, true, true, false];
+  // Scripted opponent reveal cadence (only used in .accept mode).
   static const _oppSecondsPerQuestion = 7;
 
   int _qIndex = 0;
   int? _picked;
   int _myScore = 0;
+  final List<bool> _myAnswers = [];
+
+  // Opponent ghost (accept mode only).
   int _oppScore = 0;
   int _oppAnswered = 0;
-  bool _finished = false;
-
   Timer? _oppTicker;
+
   Timer? _advanceTimer;
   final Stopwatch _raceWatch = Stopwatch()..start();
+
+  bool _finishing = false;
+  bool _finished = false;
+  String? _error;
+
+  /// The created (challenger) or completed (opponent) duel, once finished.
+  DuelMatch? _resultDuel;
 
   @override
   void initState() {
     super.initState();
-    _oppTicker = Timer.periodic(
-      const Duration(seconds: _oppSecondsPerQuestion),
-      (_) {
-        if (_oppAnswered >= _questions.length) return;
-        setState(() {
-          if (_oppPattern[_oppAnswered % _oppPattern.length]) _oppScore++;
-          _oppAnswered++;
-        });
-      },
-    );
+    if (widget.isChallenger) {
+      final pick = DuelQuestions.pick();
+      _topic = pick.topic;
+      _questionIds = pick.questionIds;
+    } else {
+      _topic = widget.duel!.topic;
+      _questionIds = widget.duel!.questionIds;
+    }
+    _questions = DuelQuestions.resolve(_questionIds);
+
+    if (!widget.isChallenger) {
+      // Replay the challenger's run as a ghost, one answer every few seconds.
+      _oppTicker = Timer.periodic(
+        const Duration(seconds: _oppSecondsPerQuestion),
+        (_) {
+          if (_oppAnswered >= _questions.length) return;
+          setState(() {
+            if (_ghostCorrectAt(_oppAnswered)) _oppScore++;
+            _oppAnswered++;
+          });
+        },
+      );
+    }
   }
 
   @override
@@ -68,12 +108,21 @@ class _DuelRaceScreenState extends State<DuelRaceScreen> {
     super.dispose();
   }
 
+  /// Was the challenger correct on question [i]? Uses the stored per-question
+  /// answers, falling back to a score-derived guess for legacy rows.
+  bool _ghostCorrectAt(int i) {
+    final answers = widget.duel?.challengerAnswers ?? const [];
+    if (i < answers.length) return answers[i];
+    return i < (widget.duel?.challengerScore ?? 0);
+  }
+
   void _pick(int i) {
-    if (_picked != null || _finished) return;
+    if (_picked != null || _finished || _finishing) return;
     final correct = i == _questions[_qIndex].correctIndex;
     HapticFeedback.mediumImpact();
     setState(() {
       _picked = i;
+      _myAnswers.add(correct);
       if (correct) _myScore++;
     });
     _advanceTimer = Timer(const Duration(milliseconds: 900), _next);
@@ -81,17 +130,7 @@ class _DuelRaceScreenState extends State<DuelRaceScreen> {
 
   void _next() {
     if (_qIndex >= _questions.length - 1) {
-      // Race over for you — resolve the opponent's remaining answers so the
-      // final score is complete.
-      _oppTicker?.cancel();
-      _raceWatch.stop();
-      setState(() {
-        while (_oppAnswered < _questions.length) {
-          if (_oppPattern[_oppAnswered % _oppPattern.length]) _oppScore++;
-          _oppAnswered++;
-        }
-        _finished = true;
-      });
+      _finish();
       return;
     }
     setState(() {
@@ -100,22 +139,88 @@ class _DuelRaceScreenState extends State<DuelRaceScreen> {
     });
   }
 
+  Future<void> _finish() async {
+    _oppTicker?.cancel();
+    _raceWatch.stop();
+    // Settle the ghost's remaining answers for a complete final score.
+    while (_oppAnswered < _questions.length) {
+      if (_ghostCorrectAt(_oppAnswered)) _oppScore++;
+      _oppAnswered++;
+    }
+    setState(() => _finishing = true);
+
+    final controller = ref.read(duelControllerProvider);
+    try {
+      final DuelMatch duel;
+      if (widget.isChallenger) {
+        duel = await controller.createChallenge(
+          topic: _topic,
+          questionIds: _questionIds,
+          answers: _myAnswers,
+          score: _myScore,
+          target: widget.target,
+        );
+      } else {
+        duel = await controller.submitResult(
+          duel: widget.duel!,
+          score: _myScore,
+        );
+      }
+      if (!mounted) return;
+      setState(() {
+        _resultDuel = duel;
+        _finished = true;
+        _finishing = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Could not save your duel. Check your connection.';
+        _finishing = false;
+        _finished = true;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
 
+    if (_finishing) {
+      return Scaffold(
+        backgroundColor: p.bg,
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     if (_finished) {
+      if (_error != null) {
+        return _ErrorView(message: _error!, onDone: () => Navigator.pop(context));
+      }
+      if (widget.isChallenger) {
+        return _ChallengeReadyView(
+          duel: _resultDuel!,
+          myScore: _myScore,
+          total: _questions.length,
+          onDone: () => Navigator.pop(context),
+        );
+      }
+      final me = ref.read(currentPlayerProvider);
       return _RaceResultView(
-        opponentName: widget.opponentName,
+        opponentName: widget.duel!.challengerName,
         myScore: _myScore,
-        oppScore: _oppScore,
+        oppScore: widget.duel!.challengerScore ?? _oppScore,
         total: _questions.length,
         seconds: _raceWatch.elapsed.inSeconds,
-        onDone: () => Navigator.of(context).pop(),
+        outcome: _resultDuel?.outcomeFor(me.id),
+        onDone: () => Navigator.pop(context),
       );
     }
 
     final q = _questions[_qIndex];
+    final oppName = widget.isChallenger
+        ? 'You set the pace'
+        : widget.duel!.challengerName.split(' ').first;
 
     return Scaffold(
       backgroundColor: p.bg,
@@ -123,7 +228,8 @@ class _DuelRaceScreenState extends State<DuelRaceScreen> {
         child: Column(
           children: [
             _RaceHeader(
-              opponentName: widget.opponentName,
+              opponentName: oppName,
+              soloPace: widget.isChallenger,
               myScore: _myScore,
               oppScore: _oppScore,
               myProgress: _qIndex / _questions.length,
@@ -205,6 +311,7 @@ class _DuelRaceScreenState extends State<DuelRaceScreen> {
 class _RaceHeader extends StatelessWidget {
   const _RaceHeader({
     required this.opponentName,
+    required this.soloPace,
     required this.myScore,
     required this.oppScore,
     required this.myProgress,
@@ -213,6 +320,7 @@ class _RaceHeader extends StatelessWidget {
   });
 
   final String opponentName;
+  final bool soloPace;
   final int myScore, oppScore;
   final double myProgress, oppProgress;
   final VoidCallback onClose;
@@ -248,7 +356,7 @@ class _RaceHeader extends StatelessWidget {
                       transitionBuilder: (child, anim) =>
                           ScaleTransition(scale: anim, child: child),
                       child: Text(
-                        '$myScore – $oppScore',
+                        soloPace ? '$myScore' : '$myScore – $oppScore',
                         key: ValueKey('$myScore-$oppScore'),
                         style: text.headlineSmall?.copyWith(
                           color: p.accent,
@@ -258,7 +366,7 @@ class _RaceHeader extends StatelessWidget {
                     ),
                     const SizedBox(width: 10),
                     Text(
-                      opponentName.split(' ').first,
+                      soloPace ? '' : opponentName,
                       style: text.labelLarge,
                     ),
                   ],
@@ -279,7 +387,7 @@ class _RaceHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 _RacerTrack(
-                  label: opponentName.split(' ').first,
+                  label: soloPace ? '…' : opponentName,
                   progress: oppProgress,
                   color: const Color(0xFFEC4899),
                 ),
@@ -419,7 +527,7 @@ class _RaceOption extends StatelessWidget {
   }
 }
 
-// ─── Result ───────────────────────────────────────────────────────────────────
+// ─── Result (opponent) ────────────────────────────────────────────────────────
 class _RaceResultView extends StatelessWidget {
   const _RaceResultView({
     required this.opponentName,
@@ -427,19 +535,23 @@ class _RaceResultView extends StatelessWidget {
     required this.oppScore,
     required this.total,
     required this.seconds,
+    required this.outcome,
     required this.onDone,
   });
 
   final String opponentName;
   final int myScore, oppScore, total, seconds;
+
+  /// 'win' | 'loss' | 'draw' — the persisted outcome, falling back to scores.
+  final String? outcome;
   final VoidCallback onDone;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     final text = Theme.of(context).textTheme;
-    final won = myScore > oppScore;
-    final draw = myScore == oppScore;
+    final won = outcome == 'win' || (outcome == null && myScore > oppScore);
+    final draw = outcome == 'draw' || (outcome == null && myScore == oppScore);
     final color = won
         ? const Color(0xFF059669)
         : draw
@@ -492,6 +604,7 @@ class _RaceResultView extends StatelessWidget {
                   '$myScore – $oppScore against ${opponentName.split(' ').first}'
                   '  ·  finished in ${seconds}s',
                   style: text.bodyMedium,
+                  textAlign: TextAlign.center,
                 ),
               ),
               const SizedBox(height: 28),
@@ -540,6 +653,159 @@ class _RaceResultView extends StatelessWidget {
               const Spacer(),
               AppButton(label: 'Back to the arena', onTap: onDone),
               const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Result (challenger): your run is now a shareable challenge ────────────────
+class _ChallengeReadyView extends StatelessWidget {
+  const _ChallengeReadyView({
+    required this.duel,
+    required this.myScore,
+    required this.total,
+    required this.onDone,
+  });
+
+  final DuelMatch duel;
+  final int myScore, total;
+  final VoidCallback onDone;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    final code = DuelInvite.pretty(duel.code);
+    final payload = DuelInvite.payloadFor(duel.code);
+    final targeted = duel.opponentName != null;
+
+    return Scaffold(
+      backgroundColor: p.bg,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              const SizedBox(height: 8),
+              StaggeredEntrance(
+                child: Text('Challenge ready', style: text.displaySmall),
+              ),
+              const SizedBox(height: 8),
+              StaggeredEntrance(
+                index: 1,
+                child: Text(
+                  targeted
+                      ? 'Sent to ${duel.opponentName!.split(' ').first}. '
+                          'You scored $myScore/$total — they\'ll race the same '
+                          '${duel.topic} questions to beat it.'
+                      : 'You scored $myScore/$total on ${duel.topic}. Share this '
+                          'code — a friend races the same questions to beat it.',
+                  textAlign: TextAlign.center,
+                  style: text.bodyMedium,
+                ),
+              ),
+              const SizedBox(height: 24),
+              StaggeredEntrance(
+                index: 2,
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: p.accent.withValues(alpha: 0.28),
+                        blurRadius: 30,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      InviteQrCode(data: payload, size: 220, foreground: p.accent),
+                      const SizedBox(height: 14),
+                      Text(
+                        code,
+                        style: text.titleLarge?.copyWith(
+                          color: const Color(0xFF12101A),
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              StaggeredEntrance(
+                index: 3,
+                child: Pressable(
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: code));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Code $code copied'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  },
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: p.surfaceHigh,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: p.hairline),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.copy_rounded, size: 18, color: p.textSecondary),
+                        const SizedBox(width: 10),
+                        Text('Copy code', style: text.labelLarge),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 28),
+              AppButton(label: 'Done', onTap: onDone),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Error fallback ───────────────────────────────────────────────────────────
+class _ErrorView extends StatelessWidget {
+  const _ErrorView({required this.message, required this.onDone});
+  final String message;
+  final VoidCallback onDone;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    return Scaffold(
+      backgroundColor: p.bg,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.cloud_off_rounded, color: p.textTertiary, size: 48),
+              const SizedBox(height: 16),
+              Text('Hmm.', style: text.headlineSmall),
+              const SizedBox(height: 8),
+              Text(message, textAlign: TextAlign.center, style: text.bodyMedium),
+              const SizedBox(height: 28),
+              AppButton(label: 'Back to the arena', onTap: onDone),
             ],
           ),
         ),

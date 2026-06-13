@@ -6,6 +6,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app.dart';
 import 'core/config/supabase_config.dart';
+import 'features/duel/application/duel_providers.dart';
+import 'features/duel/data/duel_identity.dart';
+import 'features/duel/data/supabase_duel_repository.dart';
 import 'features/feynman/application/providers.dart';
 import 'features/feynman/data/repository/session_repository.dart';
 import 'features/onboarding/application/auth_providers.dart';
@@ -24,6 +27,7 @@ Future<void> main() async {
   final repository = await HiveSessionRepository.open();
   final profileRepository = await HiveProfileRepository.open();
   final planRepository = await HivePlanRepository.open();
+  final duelIdentity = await DuelIdentity.open();
 
   // Real auth/database — only when the project is wired up (--dart-define).
   // Without it the app falls back to the mock auth service and stays local.
@@ -54,6 +58,8 @@ Future<void> main() async {
         // main shell. The curated plan gates the loading step in between.
         profileRepositoryProvider.overrideWithValue(profileRepository),
         planRepositoryProvider.overrideWithValue(planRepository),
+        // The local player's stable duel identity (a device UUID + name).
+        duelIdentityProvider.overrideWithValue(duelIdentity),
         // Wire real auth + cloud profile sync when Supabase is configured;
         // otherwise the providers keep their mock/no-op defaults.
         if (SupabaseConfig.isConfigured) ...[
@@ -65,6 +71,10 @@ Future<void> main() async {
           ),
           profileSyncProvider
               .overrideWithValue(const SupabaseProfileSyncService()),
+          // Real, multi-device duels go through Supabase; without it the app
+          // falls back to the in-memory repository (single-device).
+          duelRepositoryProvider
+              .overrideWithValue(const SupabaseDuelRepository()),
         ],
       ],
       child: const FeynmanApp(),

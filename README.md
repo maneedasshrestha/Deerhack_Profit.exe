@@ -1,8 +1,8 @@
-# ACELY
+# नित्यम् (Nityam)
 
 **A Duolingo for entrance-exam prep — adaptive, gamified, and built to beat burnout.**
 
-ACELY turns competitive-exam preparation (starting with Nepal's **IOE engineering
+नित्यम् turns competitive-exam preparation (starting with Nepal's **IOE engineering
 entrance**) into a structured daily habit. Instead of handing aspirants a static
 syllabus, it generates a **weekly study plan calibrated to each learner's current
 level**, drives short daily MCQ practice, reinforces memory with spaced-repetition
@@ -11,7 +11,7 @@ motivation high with streaks, stats, and live **duel battles**.
 
 > The core bet: aspirants don't fail because the material is unavailable — they
 > fail because they **burn out, lose consistency, and forget what they studied**.
-> ACELY attacks those three failure modes directly.
+> नित्यम् attacks those three failure modes directly.
 
 ---
 
@@ -26,7 +26,7 @@ Competitive-exam aspirants in Nepal hit three recurring walls:
 Most prep resources are content dumps (PDFs, video playlists, question banks). They
 optimize for *coverage*, not for *habit, retention, or genuine understanding*.
 
-| Problem | ACELY's mechanism |
+| Problem | नित्यम्'s mechanism |
 |---|---|
 | Burnout & inconsistency | Bite-sized daily sessions + streaks + winnable daily goals |
 | Low motivation | XP, levels, leagues + social accountability via duels & leaderboards |
@@ -219,7 +219,7 @@ Deerhack_Profit.exe/
 │               (currently serves the Feynman coach; other modules to follow)
 └── frontend/   Flutter app
     └── lib/
-        ├── app.dart                     MaterialApp (light theme, ACELY)
+        ├── app.dart                     MaterialApp (light theme, नित्यम्)
         ├── shell/main_shell.dart        3-tab shell + shared top bar
         ├── core/
         │   ├── theme/                   palette, typography, theme tokens
@@ -284,7 +284,7 @@ where it would be trivially extractable.
 
 ## Anti-burnout, on purpose
 
-ACELY deliberately avoids the Duolingo mechanics that *increase* stress:
+नित्यम् deliberately avoids the Duolingo mechanics that *increase* stress:
 
 - **No hearts/lives** that lock you out after mistakes — punishing wrong answers
   discourages the exact practice we want.
