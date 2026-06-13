@@ -1,0 +1,67 @@
+# Single-command stack: Ollama model + Node backend + Cloudflare tunnel.
+#
+#   docker compose up -d        # start everything
+#   docker compose logs -f      # watch all three
+#   docker compose down         # stop everything
+#
+# First run downloads the qwen2.5:3b model into the `ollama_data` volume,
+# so it survives restarts and is only fetched once.
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    # Start the server, wait for it, pull the model, then keep serving.
+    # ($$ escapes $ so docker compose doesn't interpolate it.)
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        ollama serve &
+        pid=$$!
+        until ollama list >/dev/null 2>&1; do sleep 1; done
+        ollama pull qwen2.5:3b
+        wait $$pid
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list | grep -q qwen2.5:3b"]
+      interval: 10s
+      timeout: 5s
+      start_period: 120s   # generous: first pull can take minutes
+      retries: 30
+    # --- Optional NVIDIA GPU acceleration; safe to delete if CPU-only ---
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      PORT: "8787"
+      OLLAMA_BASE_URL: "http://ollama:11434"
+      OLLAMA_MODEL: "qwen2.5:3b"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    # Expose locally too, handy for debugging without the tunnel.
+    ports:
+      - "8787:8787"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    # Uses the config.yml + credentials json mounted below.
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./cloudflared:/etc/cloudflared:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  ollama_data:

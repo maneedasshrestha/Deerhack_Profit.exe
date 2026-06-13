@@ -58,6 +58,22 @@ const RESPONSE_SCHEMA = {
   propertyOrdering: ["reaction", "question", "clarity", "jargon"],
 };
 
+// Study-planner persona for POST /v1/plan/generate. Asked for strict JSON; we
+// validate/normalise the shape defensively before returning, exactly like the
+// student turn endpoint.
+const PLANNER_SYSTEM_PROMPT = `You are an expert exam-preparation coach. Given a learner's situation — their exam, how many days remain, the mark they're targeting, and how many hours a day they can study — design a concise, realistic, curated study plan.
+
+Be specific and encouraging, never generic. Weight subjects by what earns the most marks for this exam. Keep every piece of text short and scannable.
+
+Respond with ONLY a JSON object in exactly this shape:
+{
+  "summary": "2-3 sentence overview of the strategy, mentioning the timeline and target",
+  "focusAreas": ["3 to 5 short, high-leverage priorities"],
+  "subjectFocus": [{"subject": "name", "weight": 0-100 integer, "note": "one short line on why / what to do"}],
+  "milestones": [{"phase": "e.g. Weeks 1-3", "theme": "short title", "detail": "one short line"}]
+}
+The subjectFocus weights should roughly sum to 100. Provide 3 to 5 milestones that progress from foundations to final revision and timed mocks.`;
+
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "256kb" }));
@@ -166,6 +182,129 @@ app.post("/v1/student/turn", async (req, res) => {
           "project that has free-tier quota.",
       });
     }
+    return res.status(502).json({ error: "Upstream model error." });
+  }
+});
+
+function clampInt(value, min, max, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(n)));
+}
+
+function cleanStr(value, fallback = "") {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function buildPlanPrompt({ examName, daysToExam, totalWeeks, weeklyHours, targetMarks, totalMarks }) {
+  return (
+    `My exam: ${examName}.\n` +
+    `Days until the exam: ${daysToExam} (about ${totalWeeks} weeks).\n` +
+    `I can study about ${weeklyHours} hours per week.\n` +
+    `My target: ${targetMarks} out of ${totalMarks} marks.\n\n` +
+    `Design my curated study plan as JSON.`
+  );
+}
+
+app.post("/v1/plan/generate", async (req, res) => {
+  const body = req.body ?? {};
+  const examName = cleanStr(body.examName, "the exam");
+  const daysToExam = clampInt(body.daysToExam, 1, 2000, 100);
+  const targetMarks = clampInt(body.targetMarks, 0, 100000, 0);
+  const totalMarks = clampInt(body.totalMarks, 1, 100000, 100);
+  const dailyHours = Number.isFinite(Number(body.dailyHours)) ? Number(body.dailyHours) : 1;
+
+  // Deterministic facts the model shouldn't have to compute.
+  const totalWeeks = Math.max(1, Math.round(daysToExam / 7));
+  const weeklyHours = Math.round(dailyHours * 7 * 10) / 10;
+
+  const userContent = buildPlanPrompt({
+    examName,
+    daysToExam,
+    totalWeeks,
+    weeklyHours,
+    targetMarks,
+    totalMarks,
+  });
+
+  try {
+    const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [
+          { role: "system", content: PLANNER_SYSTEM_PROMPT },
+          { role: "user", content: userContent },
+        ],
+        stream: false,
+        format: "json",
+        options: { temperature: 0.6 },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      console.error("[plan/generate] ollama error:", response.status, errorText.slice(0, 500));
+      return res.status(502).json({ error: `Ollama returned HTTP ${response.status}.` });
+    }
+
+    const payload = await response.json();
+    const text = payload?.message?.content;
+    if (typeof text !== "string" || !text.trim()) {
+      return res.status(502).json({ error: "Empty model response." });
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(stripCodeFences(text));
+    } catch {
+      return res.status(502).json({ error: "Model returned non-JSON." });
+    }
+
+    // Defensive normalisation — never trust the shape blindly.
+    const focusAreas = Array.isArray(parsed.focusAreas)
+      ? parsed.focusAreas.filter((t) => typeof t === "string" && t.trim()).map((t) => t.trim()).slice(0, 6)
+      : [];
+
+    const subjectFocus = Array.isArray(parsed.subjectFocus)
+      ? parsed.subjectFocus
+          .filter((s) => s && cleanStr(s.subject))
+          .map((s) => ({
+            subject: cleanStr(s.subject),
+            weight: clampInt(s.weight, 0, 100, 0),
+            note: cleanStr(s.note),
+          }))
+          .slice(0, 6)
+      : [];
+
+    const milestones = Array.isArray(parsed.milestones)
+      ? parsed.milestones
+          .filter((m) => m && cleanStr(m.theme))
+          .map((m) => ({
+            phase: cleanStr(m.phase),
+            theme: cleanStr(m.theme),
+            detail: cleanStr(m.detail),
+          }))
+          .slice(0, 6)
+      : [];
+
+    const out = {
+      summary: cleanStr(
+        parsed.summary,
+        `A ${totalWeeks}-week plan for ${examName}, pacing about ${weeklyHours} hours a week toward ${targetMarks}/${totalMarks} marks.`
+      ),
+      totalWeeks,
+      weeklyHours,
+      focusAreas,
+      subjectFocus,
+      milestones,
+    };
+
+    return res.json(out);
+  } catch (err) {
+    const msg = err?.message || String(err);
+    console.error("[plan/generate] error:", msg);
     return res.status(502).json({ error: "Upstream model error." });
   }
 });
