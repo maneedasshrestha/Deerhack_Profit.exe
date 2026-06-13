@@ -1,0 +1,20 @@
+# Cloudflare tunnel config used INSIDE the docker-compose network.
+#
+# Key difference from the host config: the ingress service points at the
+# `backend` container (http://backend:8787), NOT http://localhost:8787 —
+# inside the compose network, services reach each other by service name.
+#
+# Setup on the server laptop:
+#   1. Copy your tunnel credentials file here:
+#        cp ~/.cloudflared/<TUNNEL-ID>.json  ./cloudflared/
+#   2. Replace <TUNNEL-ID> below with that same id (the json filename).
+#   3. Replace the hostname with your real public hostname.
+# The credentials json is gitignored — do not commit it.
+
+tunnel: a763429a-7806-4784-a041-44de49d345d6
+credentials-file: /etc/cloudflared/a763429a-7806-4784-a041-44de49d345d6.json
+
+ingress:
+  - hostname: api.singhdipesh.com.np
+    service: http://backend:8787
+  - service: http_status:404
