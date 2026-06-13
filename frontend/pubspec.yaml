@@ -32,7 +32,7 @@ dependencies:
 
   # Inter variable font for the typographic hierarchy.
   google_fonts: ^6.2.1
-  lucide_icons: ^0.257.0
+  lucide_icons_flutter: ^3.0.0
 
 dev_dependencies:
   flutter_test:
