@@ -32,19 +32,16 @@ dependencies:
 
   # Inter variable font for the typographic hierarchy.
   google_fonts: ^6.2.1
-  lucide_icons: ^0.257.0
-  qr_flutter: ^4.1.0
-  mobile_scanner: ^7.2.0
+  lucide_icons_flutter: ^3.0.0
 
-  # Onboarding profile photo — pick from gallery or camera. A default
-  # gradient-initials avatar is used when no photo is chosen.
+  # QR duel flow: generate invite codes, scan them via the camera, and pick
+  # an image from the gallery to decode a code offline.
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^5.2.3
   image_picker: ^1.1.2
 
-  # Auth + database + storage. Native Google sign-in feeds an ID token into
-  # Supabase auth (signInWithIdToken); the profile row + avatar live in Supabase.
-  # google_sign_in pinned to 6.x: its signIn()/authentication API matches the
-  # documented Supabase native-Google flow (7.x renamed these to authenticate()).
-  supabase_flutter: ^2.8.0
+  # Auth + profile sync backend.
+  supabase_flutter: ^2.5.6
   google_sign_in: ^6.2.1
 
 dev_dependencies:
