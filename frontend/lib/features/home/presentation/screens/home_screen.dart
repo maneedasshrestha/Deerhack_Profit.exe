@@ -132,14 +132,15 @@ class _WeekHeaderCardState extends State<_WeekHeaderCard> {
       margin: const EdgeInsets.fromLTRB(20, 12, 20, 4),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: p.accent.withValues(alpha: 0.18), width: 1),
         boxShadow: [
           BoxShadow(
-            color: p.accent.withValues(alpha: 0.40),
-            blurRadius: 28,
-            offset: const Offset(0, 14),
+            color: p.accent.withValues(alpha: 0.18),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
           ),
           BoxShadow(
-            color: const Color(0xFF6D28D9).withValues(alpha: 0.22),
+            color: const Color(0xFF6D28D9).withValues(alpha: 0.08),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -149,21 +150,21 @@ class _WeekHeaderCardState extends State<_WeekHeaderCard> {
         borderRadius: BorderRadius.circular(26),
         child: Stack(
           children: [
-            // Base gradient.
+            // Base wash: near-white fading into a soft lavender tint.
             const Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [Color(0xFF6D28D9), Color(0xFFA070FF)],
+                    colors: [Color(0xFFFDFCFF), Color(0xFFF3EEFF)],
                   ),
                 ),
               ),
             ),
             // Fluid blobs that morph and drift behind the content.
-            const Positioned.fill(child: _FluidBlobs()),
-            // Glossy top sheen for a 3D, lit-from-above feel.
+            Positioned.fill(child: _FluidBlobs(color: p.accent)),
+            // Soft top sheen for a subtle lit-from-above feel.
             Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
@@ -171,7 +172,7 @@ class _WeekHeaderCardState extends State<_WeekHeaderCard> {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      Colors.white.withValues(alpha: 0.16),
+                      Colors.white.withValues(alpha: 0.50),
                       Colors.white.withValues(alpha: 0),
                     ],
                     stops: const [0, 0.55],
@@ -203,7 +204,7 @@ class _WeekHeaderCardState extends State<_WeekHeaderCard> {
                                   'WEEK ${week.weekNumber} OF '
                                   '${week.totalWeeks}',
                                   style: text.labelSmall?.copyWith(
-                                    color: Colors.white.withValues(alpha: 0.85),
+                                    color: p.accent.withValues(alpha: 0.85),
                                     letterSpacing: 1.6,
                                     fontWeight: FontWeight.w700,
                                   ),
@@ -212,7 +213,7 @@ class _WeekHeaderCardState extends State<_WeekHeaderCard> {
                                 Text(
                                   week.theme,
                                   style: text.headlineSmall?.copyWith(
-                                    color: Colors.white,
+                                    color: p.textPrimary,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
@@ -224,14 +225,14 @@ class _WeekHeaderCardState extends State<_WeekHeaderCard> {
                             progress: week.progress,
                             size: 42,
                             strokeWidth: 4,
-                            color: Colors.white,
-                            backgroundColor: Colors.white.withValues(
-                              alpha: 0.25,
+                            color: p.accent,
+                            backgroundColor: p.accent.withValues(
+                              alpha: 0.18,
                             ),
                             child: Text(
                               '${week.completedCount}/${week.levels.length}',
                               style: text.labelSmall?.copyWith(
-                                color: Colors.white,
+                                color: p.accent,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 9,
                               ),
@@ -244,7 +245,7 @@ class _WeekHeaderCardState extends State<_WeekHeaderCard> {
                             curve: Curves.easeOutCubic,
                             child: Icon(
                               Icons.keyboard_arrow_down_rounded,
-                              color: Colors.white.withValues(alpha: 0.9),
+                              color: p.textSecondary,
                               size: 26,
                             ),
                           ),
@@ -272,6 +273,7 @@ class _ExpandedBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     final text = Theme.of(context).textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -282,13 +284,13 @@ class _ExpandedBody extends StatelessWidget {
             Icon(
               Icons.adjust_rounded,
               size: 13,
-              color: Colors.white.withValues(alpha: 0.8),
+              color: p.accent.withValues(alpha: 0.8),
             ),
             const SizedBox(width: 5),
             Text(
               'GOALS TO CLEAR',
               style: text.labelSmall?.copyWith(
-                color: Colors.white.withValues(alpha: 0.8),
+                color: p.accent.withValues(alpha: 0.8),
                 letterSpacing: 1.2,
                 fontWeight: FontWeight.w700,
               ),
@@ -307,10 +309,10 @@ class _ExpandedBody extends StatelessWidget {
                   vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.18),
+                  color: p.accent.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.22),
+                    color: p.accent.withValues(alpha: 0.22),
                     width: 1,
                   ),
                 ),
@@ -320,16 +322,16 @@ class _ExpandedBody extends StatelessWidget {
                     Container(
                       width: 5,
                       height: 5,
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white,
+                        color: p.accent,
                       ),
                     ),
                     const SizedBox(width: 7),
                     Text(
                       t,
                       style: text.labelSmall?.copyWith(
-                        color: Colors.white,
+                        color: p.accent,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -343,7 +345,7 @@ class _ExpandedBody extends StatelessWidget {
           'Drafted from last week\'s mock — clear every level, then '
           'prove it in Sunday\'s test.',
           style: text.labelMedium?.copyWith(
-            color: Colors.white.withValues(alpha: 0.85),
+            color: p.textSecondary,
           ),
         ),
         const SizedBox(height: 14),
@@ -357,10 +359,10 @@ class _ExpandedBody extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.16),
+              color: p.accent.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: Colors.white.withValues(alpha: 0.22),
+                color: p.accent.withValues(alpha: 0.22),
                 width: 1,
               ),
             ),
@@ -370,15 +372,15 @@ class _ExpandedBody extends StatelessWidget {
                 Text(
                   'See topics & questions',
                   style: text.labelMedium?.copyWith(
-                    color: Colors.white,
+                    color: p.accent,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(width: 4),
-                const Icon(
+                Icon(
                   Icons.arrow_forward_rounded,
                   size: 16,
-                  color: Colors.white,
+                  color: p.accent,
                 ),
               ],
             ),
@@ -394,7 +396,10 @@ class _ExpandedBody extends StatelessWidget {
 /// drift around the card — a slow "lava-lamp" motion that gives the card
 /// character without competing with the content above it.
 class _FluidBlobs extends StatefulWidget {
-  const _FluidBlobs();
+  const _FluidBlobs({required this.color});
+
+  /// Tint for the blobs — drawn at low alpha so they read as a soft wash.
+  final Color color;
 
   @override
   State<_FluidBlobs> createState() => _FluidBlobsState();
@@ -425,7 +430,7 @@ class _FluidBlobsState extends State<_FluidBlobs>
           animation: _c,
           builder: (context, _) => CustomPaint(
             size: Size.infinite,
-            painter: _BlobPainter(t: _c.value),
+            painter: _BlobPainter(t: _c.value, color: widget.color),
           ),
         ),
       ),
@@ -434,10 +439,13 @@ class _FluidBlobsState extends State<_FluidBlobs>
 }
 
 class _BlobPainter extends CustomPainter {
-  const _BlobPainter({required this.t});
+  const _BlobPainter({required this.t, required this.color});
 
   /// Continuous loop value 0..1.
   final double t;
+
+  /// Base tint for every blob.
+  final Color color;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -453,7 +461,7 @@ class _BlobPainter extends CustomPainter {
       ),
       baseR: s * 0.46,
       phase: phase,
-      alpha: 0.16,
+      alpha: 0.08,
       blur: 18,
       h: const [0.18, 0.12, 0.08],
     );
@@ -467,7 +475,7 @@ class _BlobPainter extends CustomPainter {
       ),
       baseR: s * 0.54,
       phase: phase * 1.3 + 1.5,
-      alpha: 0.12,
+      alpha: 0.06,
       blur: 22,
       h: const [0.16, 0.10, 0.07],
     );
@@ -481,7 +489,7 @@ class _BlobPainter extends CustomPainter {
       ),
       baseR: s * 0.2,
       phase: phase * 1.7,
-      alpha: 0.10,
+      alpha: 0.05,
       blur: 12,
       h: const [0.24, 0.15, 0.10],
     );
@@ -519,7 +527,7 @@ class _BlobPainter extends CustomPainter {
     canvas.drawPath(
       path,
       Paint()
-        ..color = Colors.white.withValues(alpha: alpha)
+        ..color = color.withValues(alpha: alpha)
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, blur),
     );
   }

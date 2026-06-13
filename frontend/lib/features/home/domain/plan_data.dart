@@ -312,7 +312,10 @@ class PlanData {
   ];
 
   // ── Mock test (timed, mixed subjects) ─────────────────────────────────────
-  static const Duration mockTestDuration = Duration(minutes: 8);
+  static const Duration mockTestDuration = Duration(minutes: 120);
+  // Exam-paper size shown in the intro. The live mock runs a shorter mixed set
+  // (see [mockTestQuestions]) rather than all 100.
+  static const int mockTestQuestionCount = 100;
   static List<MockQuestion> get mockTestQuestions => [
         ...MockData.workEnergyQuestions.take(3),
         ...MockData.derivativesQuestions.take(3),

@@ -21,6 +21,13 @@ class SupabaseConfig {
   static const String googleWebClientId =
       String.fromEnvironment('GOOGLE_WEB_CLIENT_ID');
 
+  /// The OAuth **iOS** client ID. Required for native Google sign-in on iOS:
+  /// google_sign_in passes it as `clientId`, and its reversed form must be
+  /// registered as a URL scheme in ios/Runner/Info.plist. Leave empty on
+  /// platforms that don't need it (e.g. Android).
+  static const String googleIosClientId =
+      String.fromEnvironment('GOOGLE_IOS_CLIENT_ID');
+
   /// True once the Supabase project is wired up. Gates real auth vs the mock.
   static bool get isConfigured =>
       url.isNotEmpty && anonKey.isNotEmpty && googleWebClientId.isNotEmpty;

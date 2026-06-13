@@ -17,11 +17,15 @@ import 'auth_service.dart';
 // the one the Supabase native-Google docs describe.
 // ═══════════════════════════════════════════════════════════════════════════
 class SupabaseAuthService implements AuthService {
-  SupabaseAuthService({required String webClientId})
+  SupabaseAuthService({required String webClientId, String iosClientId = ''})
       : _google = GoogleSignIn(
-          // On Android the OAuth client is matched by package name + SHA-1, so
-          // only the *server* (Web) client ID is needed here. It is also the
-          // audience Supabase validates the ID token against.
+          // iOS needs the *iOS* OAuth client ID. Its reversed form must also be
+          // registered as a URL scheme in Info.plist, or signIn() fails. On
+          // Android the client is matched by package name + SHA-1, so clientId
+          // stays null there.
+          clientId: iosClientId.isNotEmpty ? iosClientId : null,
+          // The *server* (Web) client ID. On Android it's the only ID needed; it
+          // is also the audience Supabase validates the ID token against.
           serverClientId: webClientId,
           scopes: const ['email', 'profile'],
         );

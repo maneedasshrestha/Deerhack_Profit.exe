@@ -32,7 +32,7 @@ class FeynmanApp extends ConsumerWidget {
       home = const MainShell(initialIndex: 0);
     }
     return MaterialApp(
-      title: 'ACELY',
+      title: 'नित्यम्',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       // The app is intentionally light-only: one calm, consistent look.

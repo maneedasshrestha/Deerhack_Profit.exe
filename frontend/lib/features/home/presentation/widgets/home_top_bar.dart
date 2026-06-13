@@ -6,6 +6,8 @@ import '../../../../core/widgets/ui_kit.dart';
 import '../../../onboarding/application/auth_providers.dart';
 import '../../../onboarding/application/onboarding_providers.dart';
 import '../../../onboarding/presentation/widgets/profile_avatar.dart';
+import '../../../onboarding/application/onboarding_providers.dart';
+import '../../../onboarding/presentation/widgets/profile_avatar.dart';
 import '../../application/study_providers.dart';
 import '../../domain/mock_data.dart';
 import '../../domain/plan_data.dart';
@@ -42,11 +44,11 @@ class HomeTopBar extends ConsumerWidget {
       child: Row(
         children: [
           Text(
-            'acely',
+            'नित्यम्',
             style: text.titleMedium?.copyWith(
               color: p.accent,
               fontWeight: FontWeight.w800,
-              letterSpacing: -0.5,
+              letterSpacing: 0,
               fontSize: 21,
             ),
           ),

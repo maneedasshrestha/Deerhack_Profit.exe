@@ -53,17 +53,47 @@ class WeekDetailScreen extends StatelessWidget {
                 slivers: [
                   SliverToBoxAdapter(
                     child: StaggeredEntrance(
-                      child: GradientHeroCard(
-                        eyebrow: 'WEEK ${week.weekNumber} OF ${week.totalWeeks}',
-                        title: week.theme,
-                        pills: [
-                          HeroStatPill(
-                              label: '${topics.length} topics',
-                              icon: Icons.category_rounded),
-                          HeroStatPill(
-                              label: '$totalQuestions questions',
-                              icon: Icons.quiz_rounded),
-                        ],
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Text(
+                              'WEEK ${week.weekNumber} OF ${week.totalWeeks}',
+                              textAlign: TextAlign.center,
+                              style: text.labelSmall?.copyWith(
+                                color: const Color(0xFF8B73C9),
+                                letterSpacing: 1.6,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              week.theme,
+                              textAlign: TextAlign.center,
+                              style: text.headlineSmall?.copyWith(
+                                color: const Color(0xFF5B21B6),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Wrap(
+                              alignment: WrapAlignment.center,
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                _StatChip(
+                                  label: '${topics.length} topics',
+                                  icon: Icons.category_rounded,
+                                ),
+                                _StatChip(
+                                  label: '$totalQuestions questions',
+                                  icon: Icons.quiz_rounded,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -189,6 +219,42 @@ class _BankLink extends StatelessWidget {
             Icon(Icons.chevron_right_rounded, color: p.textTertiary),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── Stat chip for the week header (light surface, black label) ───────────────
+class _StatChip extends StatelessWidget {
+  const _StatChip({required this.label, required this.icon});
+
+  final String label;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: p.hairline),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: p.textPrimary),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: text.labelSmall?.copyWith(
+              color: p.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }
