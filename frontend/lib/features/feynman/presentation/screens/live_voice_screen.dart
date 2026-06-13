@@ -118,77 +118,12 @@ class _LiveVoiceScreenState extends ConsumerState<LiveVoiceScreen> {
 
   Future<void> _openTypeSheet(BuildContext context) async {
     final controller = ref.read(feynmanControllerProvider(widget.args).notifier);
-    final textController = TextEditingController();
-    final p = context.palette;
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (sheetContext) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
-          left: 16,
-          right: 16,
-          top: 16,
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: p.surface,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: p.hairline, width: 0.5),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Type your explanation',
-                  style: Theme.of(sheetContext).textTheme.titleMedium),
-              const SizedBox(height: 12),
-              TextField(
-                controller: textController,
-                autofocus: true,
-                maxLines: 4,
-                minLines: 2,
-                cursorColor: p.accent,
-                style: Theme.of(sheetContext).textTheme.bodyLarge,
-                decoration: InputDecoration(
-                  hintText: 'Explain it as if to a curious 12-year-old…',
-                  filled: true,
-                  fillColor: p.bg,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: p.hairline),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: p.hairline),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: p.accent),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: p.accent),
-                  onPressed: () {
-                    final txt = textController.text;
-                    Navigator.of(sheetContext).pop();
-                    controller.submitTyped(txt);
-                  },
-                  child: const Text('Send to coach'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      builder: (sheetContext) => _TypeSheet(onSend: controller.submitTyped),
     );
-    textController.dispose();
   }
 
   @override
@@ -316,6 +251,99 @@ class _LiveVoiceScreenState extends ConsumerState<LiveVoiceScreen> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The "type instead" bottom sheet. A StatefulWidget so it OWNS its
+/// [TextEditingController] and disposes it in its own dispose() — only after the
+/// sheet is fully gone. Previously the controller was created in
+/// [_openTypeSheet] and disposed right after `await showModalBottomSheet`, but
+/// tapping send rebuilds the still-closing sheet against the disposed
+/// controller ("used after being disposed" → cascades into the red screen).
+class _TypeSheet extends StatefulWidget {
+  const _TypeSheet({required this.onSend});
+
+  final void Function(String text) onSend;
+
+  @override
+  State<_TypeSheet> createState() => _TypeSheetState();
+}
+
+class _TypeSheetState extends State<_TypeSheet> {
+  final _textController = TextEditingController();
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+        left: 16,
+        right: 16,
+        top: 16,
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: p.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: p.hairline, width: 0.5),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Type your explanation',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _textController,
+              autofocus: true,
+              maxLines: 4,
+              minLines: 2,
+              cursorColor: p.accent,
+              style: Theme.of(context).textTheme.bodyLarge,
+              decoration: InputDecoration(
+                hintText: 'Explain it as if to a curious 12-year-old…',
+                filled: true,
+                fillColor: p.bg,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: p.hairline),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: p.hairline),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: p.accent),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: p.accent),
+                onPressed: () {
+                  final txt = _textController.text;
+                  Navigator.of(context).pop();
+                  widget.onSend(txt);
+                },
+                child: const Text('Send to coach'),
+              ),
+            ),
+          ],
         ),
       ),
     );
