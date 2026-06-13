@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui_kit.dart';
+import '../../../onboarding/application/onboarding_providers.dart';
+import '../../../onboarding/presentation/widgets/profile_avatar.dart';
 import '../../application/duel_providers.dart';
 import '../../domain/duel_invite.dart';
 import '../../domain/duel_match.dart';
@@ -142,6 +144,7 @@ class _HeroState extends ConsumerState<_Hero>
     final p = context.palette;
     final text = Theme.of(context).textTheme;
     final me = ref.watch(currentPlayerProvider);
+    final myPhoto = ref.watch(userProfileProvider)?.photoPath;
     final stats = ref.watch(duelStatsProvider);
     final wins = stats.valueOrNull?.wins ?? 0;
     final losses = stats.valueOrNull?.losses ?? 0;
@@ -162,7 +165,7 @@ class _HeroState extends ConsumerState<_Hero>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _HeroAvatar(label: me.initials, you: true),
+                _HeroAvatar(label: me.initials, you: true, photoPath: myPhoto),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 22),
                   child: Text(
@@ -251,20 +254,25 @@ class _StatPill extends StatelessWidget {
 }
 
 class _HeroAvatar extends StatelessWidget {
-  const _HeroAvatar({required this.label, required this.you});
+  const _HeroAvatar({required this.label, required this.you, this.photoPath});
   final String label;
   final bool you;
+
+  /// The signed-in learner's photo, shown for the "you" side when set.
+  final String? photoPath;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     final text = Theme.of(context).textTheme;
+    // Drop the "you" gradient/shadow framing onto the actual photo when present.
+    final hasPhoto = (photoPath ?? '').isNotEmpty;
     return Container(
       width: 76,
       height: 76,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: you
+        gradient: you && !hasPhoto
             ? const LinearGradient(
                 colors: [Color(0xFF7C3AED), Color(0xFF9F5BFF)],
                 begin: Alignment.topLeft,
@@ -283,15 +291,17 @@ class _HeroAvatar extends StatelessWidget {
               ]
             : null,
       ),
-      child: Center(
-        child: Text(
-          label,
-          style: text.headlineSmall?.copyWith(
-            color: you ? Colors.white : p.textTertiary,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ),
+      child: hasPhoto
+          ? ProfileAvatar(initials: label, photoPath: photoPath, size: 76)
+          : Center(
+              child: Text(
+                label,
+                style: text.headlineSmall?.copyWith(
+                  color: you ? Colors.white : p.textTertiary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
     );
   }
 }

@@ -76,12 +76,12 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                         StaggeredEntrance(
                           index: 1,
                           child: Text(
-                            'ACELY',
+                            'नित्यम्',
                             textAlign: TextAlign.center,
                             style: text.displayMedium?.copyWith(
                               fontSize: 42,
                               fontWeight: FontWeight.w800,
-                              letterSpacing: 3,
+                              letterSpacing: 1,
                             ),
                           ),
                         ),

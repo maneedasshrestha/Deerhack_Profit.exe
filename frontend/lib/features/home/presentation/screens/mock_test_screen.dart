@@ -115,7 +115,7 @@ class _MockTestScreenState extends State<MockTestScreen> {
   Widget build(BuildContext context) {
     return switch (_stage) {
       _Stage.intro => _IntroView(
-          questionCount: _questions.length,
+          questionCount: PlanData.mockTestQuestionCount,
           onStart: _start,
           onClose: () => Navigator.of(context).pop(),
         ),

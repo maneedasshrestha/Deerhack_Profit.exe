@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui_kit.dart';
+import '../../../onboarding/application/onboarding_providers.dart';
+import '../../../onboarding/presentation/widgets/profile_avatar.dart';
 import '../../application/study_providers.dart';
 import '../../domain/mock_data.dart';
 import '../../domain/plan_data.dart';
@@ -25,6 +27,9 @@ class HomeTopBar extends ConsumerWidget {
     final p = context.palette;
     final text = Theme.of(context).textTheme;
     final streak = ref.watch(streakProvider);
+    final profile = ref.watch(userProfileProvider);
+    final name = profile?.fullName ?? MockData.userName;
+    final initials = profile?.initials ?? name[0];
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 10, 16, 10),
       decoration: BoxDecoration(
@@ -34,11 +39,11 @@ class HomeTopBar extends ConsumerWidget {
       child: Row(
         children: [
           Text(
-            'acely',
+            'नित्यम्',
             style: text.titleMedium?.copyWith(
               color: p.accent,
               fontWeight: FontWeight.w800,
-              letterSpacing: -0.5,
+              letterSpacing: 0,
               fontSize: 21,
             ),
           ),
@@ -70,16 +75,10 @@ class HomeTopBar extends ConsumerWidget {
                     shape: BoxShape.circle,
                     border: Border.all(color: p.accent, width: 2),
                   ),
-                  child: CircleAvatar(
-                    radius: 16,
-                    backgroundColor: p.accentSoft,
-                    child: Text(
-                      MockData.userName[0],
-                      style: text.labelLarge?.copyWith(
-                        color: p.accent,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
+                  child: ProfileAvatar(
+                    initials: initials,
+                    photoPath: profile?.photoPath,
+                    size: 32,
                   ),
                 ),
               ],
