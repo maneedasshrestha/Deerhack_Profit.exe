@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
@@ -36,6 +37,10 @@ class SpeechService {
         onError: _handleError,
         onStatus: _handleStatus,
         // `speech_to_text` requests the OS mic/recognition permission here.
+        // Surfaces the native iOS error (e.g. "Not enough available inputs" on
+        // the Simulator, or an AVAudioSession activation failure) to the log so
+        // `error_listen_failed` can be diagnosed.
+        debugLogging: kDebugMode,
       );
       _initialized = true;
       if (!available) return SpeechAvailability.denied;

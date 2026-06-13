@@ -6,6 +6,7 @@ import '../../../../core/widgets/ui_kit.dart';
 import '../../application/study_providers.dart';
 import '../../domain/mock_data.dart';
 import '../../domain/plan_data.dart';
+import 'question_bank_screen.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ProfileScreen — calm and scannable. Three ideas, one per section:
@@ -64,10 +65,14 @@ class ProfileScreen extends ConsumerWidget {
                   const SliverToBoxAdapter(
                       child: StaggeredEntrance(
                           index: 3, child: _PlanTimelineCard())),
+                  const SliverToBoxAdapter(child: SectionHeader('Practice')),
+                  const SliverToBoxAdapter(
+                      child: StaggeredEntrance(
+                          index: 4, child: _QuestionBankCard())),
                   const SliverToBoxAdapter(child: SizedBox(height: 24)),
                   const SliverToBoxAdapter(
                       child: StaggeredEntrance(
-                          index: 4, child: _StarredSection())),
+                          index: 5, child: _StarredSection())),
                   const SliverToBoxAdapter(child: SizedBox(height: 40)),
                 ],
               ),
@@ -361,6 +366,57 @@ class _SubjectRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ─── Question bank entry ──────────────────────────────────────────────────────
+class _QuestionBankCard extends StatelessWidget {
+  const _QuestionBankCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    final total = PlanData.questionBank
+        .fold<int>(0, (sum, g) => sum + g.questions.length);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: AppCard(
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const QuestionBankScreen()),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: p.accentSoft,
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Icon(Icons.library_books_rounded,
+                  size: 22, color: p.accent),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Question bank', style: text.titleMedium),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Browse all $total questions across every subject',
+                    style: text.labelMedium?.copyWith(color: p.textTertiary),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: p.textTertiary),
+          ],
+        ),
+      ),
     );
   }
 }

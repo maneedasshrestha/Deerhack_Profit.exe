@@ -197,6 +197,7 @@ class _LessonScreenState extends ConsumerState<LessonScreen> {
             AnimatedSize(
               duration: const Duration(milliseconds: 280),
               curve: Curves.easeOutCubic,
+              clipBehavior: Clip.none,
               child: showPanel
                   ? _FeedbackPanel(
                       phase: _phase,
@@ -590,121 +591,238 @@ class _FeedbackPanel extends StatelessWidget {
     final p = context.palette;
     final text = Theme.of(context).textTheme;
 
-    // The hint itself lives under the question — this panel only nudges the
+    // The hint itself lives under the question — this sheet only nudges the
     // learner back up to it.
     if (phase == _Phase.hinted) {
-      return Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: p.accentSoft,
-          border: Border(
-              top: BorderSide(color: p.accent.withValues(alpha: 0.3))),
-        ),
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+      return _Sheet(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Icon(Icons.lightbulb_rounded, color: p.accent, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Not quite — check the hint under the question.',
-                    style: text.labelLarge?.copyWith(color: p.accent),
-                  ),
-                ),
-              ],
+            _header(
+              context,
+              color: p.accent,
+              icon: Icons.lightbulb_rounded,
+              title: 'Not quite',
+              subtitle: 'Take the hint under the question, then try again.',
             ),
-            const SizedBox(height: 12),
-            AppButton(
-                label: 'Try again', height: 48, onTap: onRetry),
+            const SizedBox(height: 16),
+            AppButton(label: 'Try again', height: 50, onTap: onRetry),
           ],
         ),
       );
     }
 
     final correct = phase == _Phase.correct;
-    final color =
-        correct ? const Color(0xFF059669) : const Color(0xFFE11D48);
+    const green = Color(0xFF059669);
+    const red = Color(0xFFE11D48);
+    // Clear right/wrong signal: green when correct, red when not.
+    final color = correct ? green : red;
 
-    final wrongNotes = <String>[
+    final wrongNotes = <MapEntry<String, String>>[
       for (var i = 0; i < question.whyWrong.length; i++)
         if (i != question.correctIndex && question.whyWrong[i].isNotEmpty)
-          '${String.fromCharCode(65 + i)} — ${question.whyWrong[i]}',
+          MapEntry(String.fromCharCode(65 + i), question.whyWrong[i]),
     ];
 
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.07),
-        border: Border(top: BorderSide(color: color.withValues(alpha: 0.35))),
-      ),
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+    return _Sheet(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(
-                correct ? Icons.check_circle_rounded : Icons.school_rounded,
-                color: color,
-                size: 22,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                correct ? 'Correct!' : 'Let\'s break it down',
-                style: text.titleMedium?.copyWith(color: color),
-              ),
-            ],
+          _header(
+            context,
+            color: color,
+            icon: correct ? Icons.check_rounded : Icons.close_rounded,
+            title: correct ? 'Correct' : 'Incorrect',
+            subtitle: correct ? 'Nice work.' : 'Here\'s the reasoning.',
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 14),
           ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 180),
+            constraints: const BoxConstraints(maxHeight: 220),
             child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    question.explanation,
-                    style: text.bodyMedium
-                        ?.copyWith(color: p.textSecondary, height: 1.45),
+                  // The explanation, set in a calm insight block.
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: p.surfaceHigh,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: p.hairline),
+                    ),
+                    child: Text(
+                      question.explanation,
+                      style: text.bodyMedium
+                          ?.copyWith(color: p.textPrimary, height: 1.5),
+                    ),
                   ),
                   if (wrongNotes.isNotEmpty) ...[
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 16),
                     Text(
-                      'Why the others fall short',
-                      style: text.labelMedium?.copyWith(
-                        color: p.textPrimary,
+                      'WHY THE OTHERS MISS',
+                      style: text.labelSmall?.copyWith(
+                        color: p.textTertiary,
                         fontWeight: FontWeight.w700,
+                        letterSpacing: 1.0,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    for (final note in wrongNotes)
+                    const SizedBox(height: 10),
+                    for (final n in wrongNotes)
                       Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          note,
-                          style: text.labelMedium
-                              ?.copyWith(color: p.textTertiary, height: 1.4),
-                        ),
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _WrongNote(letter: n.key, note: n.value),
                       ),
                   ],
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           AppButton(
             label: isLast ? 'See results' : 'Continue',
             color: color,
-            height: 50,
+            height: 52,
             onTap: onNext,
           ),
         ],
       ),
+    );
+  }
+
+  // Shared icon-badge + title + subtitle header.
+  Widget _header(
+    BuildContext context, {
+    required Color color,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    return Row(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.14),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: color, size: 22),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: text.titleMedium
+                    ?.copyWith(color: p.textPrimary, fontWeight: FontWeight.w700),
+              ),
+              Text(
+                subtitle,
+                style: text.labelMedium?.copyWith(color: p.textTertiary),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// A bottom sheet shell with a rounded top, a grabber, and a lift shadow —
+/// reused for both the hint nudge and the answer feedback.
+class _Sheet extends StatelessWidget {
+  const _Sheet({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 28,
+            offset: const Offset(0, -8),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: p.hairline,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+/// One "why this option misses" row: a letter chip + the reason.
+class _WrongNote extends StatelessWidget {
+  const _WrongNote({required this.letter, required this.note});
+
+  final String letter;
+  final String note;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    const red = Color(0xFFE11D48);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 22,
+          height: 22,
+          decoration: BoxDecoration(
+            color: red.withValues(alpha: 0.10),
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Text(
+              letter,
+              style: text.labelSmall?.copyWith(
+                color: red.withValues(alpha: 0.9),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            note,
+            style:
+                text.bodyMedium?.copyWith(color: p.textSecondary, height: 1.4),
+          ),
+        ),
+      ],
     );
   }
 }
