@@ -29,6 +29,9 @@ class LiveVoiceScreen extends ConsumerStatefulWidget {
 
 class _LiveVoiceScreenState extends ConsumerState<LiveVoiceScreen> {
   bool _ending = false;
+  // Once the learner sends their first typed message, the orb view gives way to
+  // a full chat layout. They can toggle back to voice from the chat header.
+  bool _chatMode = false;
 
   @override
   void initState() {
@@ -39,7 +42,9 @@ class _LiveVoiceScreenState extends ConsumerState<LiveVoiceScreen> {
   Future<void> _endSession() async {
     if (_ending) return;
     setState(() => _ending = true);
-    final controller = ref.read(feynmanControllerProvider(widget.args).notifier);
+    final controller = ref.read(
+      feynmanControllerProvider(widget.args).notifier,
+    );
     final session = await controller.endSession();
     if (!mounted) return;
     // Hero transition: the orb collapses into the reflection header.
@@ -88,18 +93,25 @@ class _LiveVoiceScreenState extends ConsumerState<LiveVoiceScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                 child: Row(
                   children: [
-                    Text('Transcript', style: Theme.of(context).textTheme.titleMedium),
+                    Text(
+                      'Transcript',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                     const Spacer(),
-                    Text('${state.gapCount} gaps so far',
-                        style: Theme.of(context).textTheme.labelSmall),
+                    Text(
+                      '${state.gapCount} gaps so far',
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
                   ],
                 ),
               ),
               Expanded(
                 child: state.transcript.isEmpty
                     ? Center(
-                        child: Text('Nothing yet — start explaining.',
-                            style: Theme.of(context).textTheme.bodyMedium),
+                        child: Text(
+                          'Nothing yet — start explaining.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
                       )
                     : ListView.builder(
                         controller: scrollController,
@@ -117,12 +129,21 @@ class _LiveVoiceScreenState extends ConsumerState<LiveVoiceScreen> {
   }
 
   Future<void> _openTypeSheet(BuildContext context) async {
-    final controller = ref.read(feynmanControllerProvider(widget.args).notifier);
+    final controller = ref.read(
+      feynmanControllerProvider(widget.args).notifier,
+    );
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (sheetContext) => _TypeSheet(onSend: controller.submitTyped),
+      builder: (sheetContext) => _TypeSheet(
+        onSend: (text) {
+          if (text.trim().isEmpty) return;
+          controller.submitTyped(text);
+          // First typed turn transforms the immersive orb view into a chat.
+          if (mounted) setState(() => _chatMode = true);
+        },
+      ),
     );
   }
 
@@ -131,9 +152,23 @@ class _LiveVoiceScreenState extends ConsumerState<LiveVoiceScreen> {
     final p = context.palette;
     final reduceMotion = context.reduceMotion;
     final state = ref.watch(feynmanControllerProvider(widget.args));
-    final controller = ref.read(feynmanControllerProvider(widget.args).notifier);
+    final controller = ref.read(
+      feynmanControllerProvider(widget.args).notifier,
+    );
     final phase = state.phase;
-    final orbSize = (MediaQuery.sizeOf(context).shortestSide * 0.72).clamp(220.0, 340.0);
+    final orbSize = (MediaQuery.sizeOf(context).shortestSide * 0.72).clamp(
+      220.0,
+      340.0,
+    );
+
+    if (_chatMode) {
+      return _ChatView(
+        args: widget.args,
+        ending: _ending,
+        onEnd: _endSession,
+        onExitToVoice: () => setState(() => _chatMode = false),
+      );
+    }
 
     return PopScope(
       // Leaving without ending still persists the session via dispose+end on back.
@@ -144,10 +179,7 @@ class _LiveVoiceScreenState extends ConsumerState<LiveVoiceScreen> {
             gradient: RadialGradient(
               center: const Alignment(0, -0.3),
               radius: 1.1,
-              colors: [
-                Color.lerp(p.bg, p.accent, 0.06)!,
-                p.bg,
-              ],
+              colors: [Color.lerp(p.bg, p.accent, 0.06)!, p.bg],
             ),
           ),
           child: SafeArea(
@@ -181,8 +213,8 @@ class _LiveVoiceScreenState extends ConsumerState<LiveVoiceScreen> {
                     behavior: HitTestBehavior.opaque,
                     child: Hero(
                       tag: 'feynman-orb',
-                      flightShuttleBuilder:
-                          (a, b, c, d, e) => const OrbBadge(size: 120),
+                      flightShuttleBuilder: (a, b, c, d, e) =>
+                          const OrbBadge(size: 120),
                       child: FeynmanOrb(
                         mode: phase.orbMode,
                         level: state.soundLevel,
@@ -235,7 +267,10 @@ class _LiveVoiceScreenState extends ConsumerState<LiveVoiceScreen> {
                           ),
                           const SizedBox(width: 10),
                           Expanded(
-                            child: _EndButton(onTap: _endSession, busy: _ending),
+                            child: _EndButton(
+                              onTap: _endSession,
+                              busy: _ending,
+                            ),
                           ),
                           const SizedBox(width: 10),
                           _IconChip(
@@ -302,8 +337,10 @@ class _TypeSheetState extends State<_TypeSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Type your explanation',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Type your explanation',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 12),
             TextField(
               controller: _textController,
@@ -341,6 +378,276 @@ class _TypeSheetState extends State<_TypeSheet> {
                   widget.onSend(txt);
                 },
                 child: const Text('Send to coach'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Mode B — the chat layout the screen adopts once the learner starts typing.
+/// Pure text in/out: a scrolling transcript of bubbles plus a persistent
+/// composer. The header lets them jump back to the immersive voice orb.
+class _ChatView extends ConsumerStatefulWidget {
+  const _ChatView({
+    required this.args,
+    required this.ending,
+    required this.onEnd,
+    required this.onExitToVoice,
+  });
+
+  final SessionArgs args;
+  final bool ending;
+  final Future<void> Function() onEnd;
+  final VoidCallback onExitToVoice;
+
+  @override
+  ConsumerState<_ChatView> createState() => _ChatViewState();
+}
+
+class _ChatViewState extends ConsumerState<_ChatView> {
+  final _scroll = ScrollController();
+  final _composer = TextEditingController();
+  int _lastCount = 0;
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    _composer.dispose();
+    super.dispose();
+  }
+
+  void _send() {
+    final text = _composer.text.trim();
+    if (text.isEmpty) return;
+    final state = ref.read(feynmanControllerProvider(widget.args));
+    if (state.phase.isBusy || state.phase.isSpeaking) return;
+    _composer.clear();
+    ref.read(feynmanControllerProvider(widget.args).notifier).submitTyped(text);
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scroll.hasClients) return;
+      _scroll.animateTo(
+        _scroll.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    final state = ref.watch(feynmanControllerProvider(widget.args));
+    final phase = state.phase;
+    final busy = phase.isBusy;
+    final canSend = !busy && !phase.isSpeaking;
+
+    // Auto-scroll whenever a turn (or the thinking row) is appended.
+    final rowCount = state.transcript.length + (busy ? 1 : 0);
+    if (rowCount != _lastCount) {
+      _lastCount = rowCount;
+      _scrollToBottom();
+    }
+
+    return PopScope(
+      canPop: true,
+      child: Scaffold(
+        backgroundColor: p.bg,
+        body: SafeArea(
+          child: Column(
+            children: [
+              // ── Header: back-to-voice · concept · timer · end ──
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
+                child: Row(
+                  children: [
+                    IconButton(
+                      tooltip: 'Back to voice',
+                      onPressed: widget.onExitToVoice,
+                      icon: Icon(
+                        Icons.graphic_eq_rounded,
+                        color: p.textSecondary,
+                      ),
+                    ),
+                    Flexible(
+                      child: StatusPill(
+                        concept: state.conceptName,
+                        version: state.version,
+                        recording: false,
+                      ),
+                    ),
+                    const Spacer(),
+                    ElapsedTimer(start: state.startedAt),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: widget.ending ? null : widget.onEnd,
+                      child: widget.ending
+                          ? SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: p.accent,
+                              ),
+                            )
+                          : Text(
+                              'End',
+                              style: text.labelLarge?.copyWith(color: p.accent),
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+              Divider(height: 1, color: p.hairline),
+
+              // ── Transcript ──
+              Expanded(
+                child: state.transcript.isEmpty
+                    ? Center(
+                        child: Text(
+                          'Type your explanation to begin.',
+                          style: text.bodyMedium?.copyWith(
+                            color: p.textTertiary,
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: _scroll,
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                        itemCount: state.transcript.length + (busy ? 1 : 0),
+                        itemBuilder: (_, i) {
+                          if (i >= state.transcript.length) {
+                            return const _ThinkingBubble();
+                          }
+                          return TranscriptBubble(entry: state.transcript[i]);
+                        },
+                      ),
+              ),
+
+              // ── Composer ──
+              Container(
+                decoration: BoxDecoration(
+                  color: p.surface,
+                  border: Border(
+                    top: BorderSide(color: p.hairline, width: 0.5),
+                  ),
+                ),
+                padding: EdgeInsets.fromLTRB(
+                  12,
+                  10,
+                  12,
+                  10 + MediaQuery.viewInsetsOf(context).bottom,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _composer,
+                        minLines: 1,
+                        maxLines: 5,
+                        textInputAction: TextInputAction.send,
+                        cursorColor: p.accent,
+                        style: text.bodyLarge,
+                        onSubmitted: (_) => _send(),
+                        decoration: InputDecoration(
+                          hintText: 'Explain it simply…',
+                          filled: true,
+                          fillColor: p.bg,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(24),
+                            borderSide: BorderSide(color: p.hairline),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(24),
+                            borderSide: BorderSide(color: p.hairline),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(24),
+                            borderSide: BorderSide(color: p.accent),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: canSend ? _send : null,
+                      child: Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          color: canSend ? p.accent : p.hairline,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.arrow_upward_rounded,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The "student is thinking" placeholder shown at the tail of the chat while a
+/// reply is in flight — mirrors the student bubble layout with a small orb.
+class _ThinkingBubble extends StatelessWidget {
+  const _ThinkingBubble();
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.only(right: 32, bottom: 14),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(top: 2),
+              child: OrbBadge(size: 30),
+            ),
+            const SizedBox(width: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: p.surface,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(18),
+                  bottomLeft: Radius.circular(18),
+                  bottomRight: Radius.circular(18),
+                ),
+                border: Border.all(color: p.hairline, width: 0.5),
+              ),
+              child: SizedBox(
+                width: 32,
+                child: Text(
+                  '…',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(color: p.textTertiary),
+                ),
               ),
             ),
           ],
@@ -390,14 +697,19 @@ class _Hint extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(err.message,
-                textAlign: TextAlign.center,
-                style: text.bodyMedium?.copyWith(color: p.textSecondary)),
+            Text(
+              err.message,
+              textAlign: TextAlign.center,
+              style: text.bodyMedium?.copyWith(color: p.textSecondary),
+            ),
             const SizedBox(height: 12),
             TextButton.icon(
               onPressed: err.retryListening ? onRetryListening : onRetryTurn,
               icon: Icon(Icons.refresh_rounded, size: 18, color: p.accent),
-              label: Text('Try again', style: text.labelMedium?.copyWith(color: p.accent)),
+              label: Text(
+                'Try again',
+                style: text.labelMedium?.copyWith(color: p.accent),
+              ),
             ),
           ],
         ),
@@ -422,7 +734,11 @@ class _Hint extends StatelessWidget {
 }
 
 class _IconChip extends StatelessWidget {
-  const _IconChip({required this.icon, required this.tooltip, required this.onTap});
+  const _IconChip({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
 
   final IconData icon;
   final String tooltip;
@@ -476,15 +792,24 @@ class _EndButton extends StatelessWidget {
               ? const SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
                 )
               : Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.flag_outlined, size: 18, color: Colors.white),
+                    const Icon(
+                      Icons.flag_outlined,
+                      size: 18,
+                      color: Colors.white,
+                    ),
                     const SizedBox(width: 8),
-                    Text('End & review',
-                        style: text.labelLarge?.copyWith(color: Colors.white)),
+                    Text(
+                      'End & review',
+                      style: text.labelLarge?.copyWith(color: Colors.white),
+                    ),
                   ],
                 ),
         ),
