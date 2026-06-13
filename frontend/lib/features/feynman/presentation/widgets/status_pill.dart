@@ -23,12 +23,18 @@ class StatusPill extends StatefulWidget {
 }
 
 class _StatusPillState extends State<StatusPill> with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 1100));
+  // Created eagerly in initState — NOT a lazy `late` initializer. If it were
+  // lazy and the pill never entered the recording state, the first access would
+  // be `_pulse.dispose()` in dispose(), which constructs the controller on an
+  // already-deactivated element and crashes (TickerMode lookup on a defunct
+  // widget → "deactivated ancestor" / InheritedElement `_dependents` assert).
+  late final AnimationController _pulse;
 
   @override
   void initState() {
     super.initState();
+    _pulse = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1100));
     if (widget.recording) _pulse.repeat(reverse: true);
   }
 

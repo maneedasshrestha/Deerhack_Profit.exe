@@ -25,3 +25,27 @@ final starredQuestionListProvider = Provider<List<MockQuestion>>((ref) {
   final ids = ref.watch(starredQuestionsProvider);
   return MockData.allQuestions.where((q) => ids.contains(q.id)).toList();
 });
+
+/// The learner's daily streak. Seeded from [MockData.streak] and extended the
+/// first time they finish a day's practice — later completions the same day
+/// keep it steady (you can't earn two days of streak in one day).
+class StreakNotifier extends StateNotifier<int> {
+  StreakNotifier() : super(MockData.streak);
+
+  bool _countedToday = false;
+
+  /// Records that today's MCQs were completed. Increments the streak only on
+  /// the first completion of the day. Returns the streak value *before* this
+  /// call so the celebration can roll the number from old → new.
+  int registerDayComplete() {
+    final before = state;
+    if (!_countedToday) {
+      _countedToday = true;
+      state = state + 1;
+    }
+    return before;
+  }
+}
+
+final streakProvider =
+    StateNotifierProvider<StreakNotifier, int>((ref) => StreakNotifier());

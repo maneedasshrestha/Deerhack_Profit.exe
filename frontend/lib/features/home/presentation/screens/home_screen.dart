@@ -75,6 +75,9 @@ class _LastWeekRecap extends StatelessWidget {
 }
 
 // ─── Week header card ─────────────────────────────────────────────────────────
+/// Collapsible week banner. Collapsed, it's a slim strip (week label, theme,
+/// progress) so the game map below gets the spotlight; expanded, it reveals the
+/// week's goals, blurb and the link into this week's topics & questions.
 class _WeekHeaderCard extends StatefulWidget {
   const _WeekHeaderCard({required this.week});
   final WeekPlan week;
@@ -84,152 +87,179 @@ class _WeekHeaderCard extends StatefulWidget {
 }
 
 class _WeekHeaderCardState extends State<_WeekHeaderCard> {
-  /// Collapsed by default — the card opens to reveal goals + actions.
+  // Start collapsed so the Duolingo path is the first thing the eye lands on.
   bool _expanded = false;
 
   void _toggle() => setState(() => _expanded = !_expanded);
 
-  // Light-theme palette for the card: white surface, purple ink, thin
-  // purple keyline.
-  static const _deepPurple = Color(0xFF5B21B6); // headings / primary ink
-  static const _accent = Color(0xFF7C3AED); // brand violet
-  static const _mutedPurple = Color(0xFF8B73C9); // secondary copy
-
   @override
   Widget build(BuildContext context) {
-    final week = widget.week;
+    final p = context.palette;
     final text = Theme.of(context).textTheme;
-    return Pressable(
-      scale: 0.98,
-      onTap: _toggle,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(28),
-          // Thin purple keyline.
-          border: Border.all(
-            color: _accent.withValues(alpha: 0.28),
-            width: 1.3,
+    final week = widget.week;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: p.accent.withValues(alpha: 0.18), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: p.accent.withValues(alpha: 0.18),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
           ),
-          boxShadow: [
-            // Soft, low purple shadow so the white card lifts off the page.
-            BoxShadow(
-              color: _accent.withValues(alpha: 0.14),
-              blurRadius: 28,
-              spreadRadius: -8,
-              offset: const Offset(0, 16),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Compact header — always visible. Tap anywhere (or the
-              // chevron) to expand the full week brief below.
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'WEEK ${week.weekNumber} OF ${week.totalWeeks}',
-                          style: text.labelSmall?.copyWith(
-                            color: _mutedPurple,
-                            letterSpacing: 1.6,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          week.theme,
-                          style: text.titleLarge?.copyWith(
-                            color: _deepPurple,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
+          BoxShadow(
+            color: const Color(0xFF6D28D9).withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(26),
+        child: Stack(
+          children: [
+            // Base wash: near-white fading into a soft lavender tint.
+            const Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFFFDFCFF), Color(0xFFF3EEFF)],
                   ),
-                  const SizedBox(width: 12),
-                  ProgressRing(
-                    progress: week.progress,
-                    size: 42,
-                    strokeWidth: 4,
-                    color: _accent,
-                    backgroundColor: _accent.withValues(alpha: 0.15),
-                    child: Text(
-                      '${week.completedCount}/${week.levels.length}',
-                      style: text.labelSmall?.copyWith(
-                        color: _deepPurple,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 9,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  // Dropdown chevron — rotates 180° when open.
-                  AnimatedRotation(
-                    turns: _expanded ? 0.5 : 0,
-                    duration: const Duration(milliseconds: 240),
-                    curve: Curves.easeOutCubic,
-                    child: Container(
-                      width: 30,
-                      height: 30,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: _accent.withValues(alpha: 0.10),
-                        border: Border.all(
-                          color: _accent.withValues(alpha: 0.28),
-                          width: 1,
-                        ),
-                      ),
-                      child: const Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        size: 20,
-                        color: _accent,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              // Expanding body — goals, brief, and the primary action.
-              AnimatedSize(
-                duration: const Duration(milliseconds: 260),
-                curve: Curves.easeOutCubic,
-                alignment: Alignment.topCenter,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minWidth: double.infinity),
-                  child: _expanded
-                      ? _buildBody(context, week, text)
-                      : const SizedBox(height: 0),
                 ),
               ),
-            ],
-          ),
+            ),
+            // Fluid blobs that morph and drift behind the content.
+            Positioned.fill(child: _FluidBlobs(color: p.accent)),
+            // Soft top sheen for a subtle lit-from-above feel.
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.white.withValues(alpha: 0.50),
+                      Colors.white.withValues(alpha: 0),
+                    ],
+                    stops: const [0, 0.55],
+                  ),
+                ),
+              ),
+            ),
+            // Animate the height as the body grows/shrinks.
+            AnimatedSize(
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.topCenter,
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── Always-visible header (tap to expand/collapse) ──
+                    Pressable(
+                      scale: 0.98,
+                      onTap: _toggle,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'WEEK ${week.weekNumber} OF '
+                                  '${week.totalWeeks}',
+                                  style: text.labelSmall?.copyWith(
+                                    color: p.accent.withValues(alpha: 0.85),
+                                    letterSpacing: 1.6,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  week.theme,
+                                  style: text.headlineSmall?.copyWith(
+                                    color: p.textPrimary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          ProgressRing(
+                            progress: week.progress,
+                            size: 42,
+                            strokeWidth: 4,
+                            color: p.accent,
+                            backgroundColor: p.accent.withValues(
+                              alpha: 0.18,
+                            ),
+                            child: Text(
+                              '${week.completedCount}/${week.levels.length}',
+                              style: text.labelSmall?.copyWith(
+                                color: p.accent,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 9,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          AnimatedRotation(
+                            turns: _expanded ? 0.5 : 0.0,
+                            duration: const Duration(milliseconds: 280),
+                            curve: Curves.easeOutCubic,
+                            child: Icon(
+                              Icons.keyboard_arrow_down_rounded,
+                              color: p.textSecondary,
+                              size: 26,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // ── Collapsible body ──
+                    if (_expanded) _ExpandedBody(week: week),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
+}
 
-  /// The expandable brief — goals, framing, and the primary action. Tapping
-  /// the purple pill opens this week's topics + MCQs.
-  Widget _buildBody(BuildContext context, WeekPlan week, TextTheme text) {
+/// The detail block revealed when the week card is expanded: the goals to
+/// clear, the planning blurb and the link into this week's topics & questions.
+class _ExpandedBody extends StatelessWidget {
+  const _ExpandedBody({required this.week});
+  final WeekPlan week;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 16),
         Row(
           children: [
-            const Icon(Icons.adjust_rounded, size: 13, color: _mutedPurple),
+            Icon(
+              Icons.adjust_rounded,
+              size: 13,
+              color: p.accent.withValues(alpha: 0.8),
+            ),
             const SizedBox(width: 5),
             Text(
               'GOALS TO CLEAR',
               style: text.labelSmall?.copyWith(
-                color: _mutedPurple,
+                color: p.accent.withValues(alpha: 0.8),
                 letterSpacing: 1.2,
                 fontWeight: FontWeight.w700,
               ),
@@ -243,12 +273,15 @@ class _WeekHeaderCardState extends State<_WeekHeaderCard> {
           children: [
             for (final t in week.targets)
               Container(
-                padding: const EdgeInsets.fromLTRB(10, 7, 13, 7),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 11,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
-                  color: _accent.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(20),
+                  color: p.accent.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: _accent.withValues(alpha: 0.22),
+                    color: p.accent.withValues(alpha: 0.22),
                     width: 1,
                   ),
                 ),
@@ -256,18 +289,18 @@ class _WeekHeaderCardState extends State<_WeekHeaderCard> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: 6,
-                      height: 6,
-                      decoration: const BoxDecoration(
+                      width: 5,
+                      height: 5,
+                      decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: _accent,
+                        color: p.accent,
                       ),
                     ),
                     const SizedBox(width: 7),
                     Text(
                       t,
                       style: text.labelSmall?.copyWith(
-                        color: _deepPurple,
+                        color: p.accent,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -280,28 +313,27 @@ class _WeekHeaderCardState extends State<_WeekHeaderCard> {
         Text(
           'Drafted from last week\'s mock — clear every level, then '
           'prove it in Sunday\'s test.',
-          style: text.labelMedium?.copyWith(color: _mutedPurple),
+          style: text.labelMedium?.copyWith(
+            color: p.textSecondary,
+          ),
         ),
-        const SizedBox(height: 16),
-        // Solid purple pill so the primary action pops against the white card.
+        const SizedBox(height: 14),
+        // Affordance: opens this week's topics + MCQs.
         Pressable(
-          scale: 0.97,
+          scale: 0.98,
           onTap: () => Navigator.of(
             context,
             rootNavigator: true,
           ).push(MaterialPageRoute(builder: (_) => const WeekDetailScreen())),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: _accent,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: _accent.withValues(alpha: 0.30),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+              color: p.accent.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: p.accent.withValues(alpha: 0.22),
+                width: 1,
+              ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -309,15 +341,15 @@ class _WeekHeaderCardState extends State<_WeekHeaderCard> {
                 Text(
                   'See topics & questions',
                   style: text.labelMedium?.copyWith(
-                    color: Colors.white,
+                    color: p.accent,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(width: 6),
-                const Icon(
+                const SizedBox(width: 4),
+                Icon(
                   Icons.arrow_forward_rounded,
                   size: 16,
-                  color: Colors.white,
+                  color: p.accent,
                 ),
               ],
             ),
@@ -333,7 +365,10 @@ class _WeekHeaderCardState extends State<_WeekHeaderCard> {
 /// drift around the card — a slow "lava-lamp" motion that gives the card
 /// character without competing with the content above it.
 class _FluidBlobs extends StatefulWidget {
-  const _FluidBlobs();
+  const _FluidBlobs({required this.color});
+
+  /// Tint for the blobs — drawn at low alpha so they read as a soft wash.
+  final Color color;
 
   @override
   State<_FluidBlobs> createState() => _FluidBlobsState();
@@ -364,7 +399,7 @@ class _FluidBlobsState extends State<_FluidBlobs>
           animation: _c,
           builder: (context, _) => CustomPaint(
             size: Size.infinite,
-            painter: _BlobPainter(t: _c.value),
+            painter: _BlobPainter(t: _c.value, color: widget.color),
           ),
         ),
       ),
@@ -373,10 +408,13 @@ class _FluidBlobsState extends State<_FluidBlobs>
 }
 
 class _BlobPainter extends CustomPainter {
-  const _BlobPainter({required this.t});
+  const _BlobPainter({required this.t, required this.color});
 
   /// Continuous loop value 0..1.
   final double t;
+
+  /// Base tint for every blob.
+  final Color color;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -386,11 +424,13 @@ class _BlobPainter extends CustomPainter {
     // Large blob, top-right.
     _blob(
       canvas,
-      center: Offset(size.width * 0.84 + 16 * math.sin(phase),
-          size.height * 0.16 + 18 * math.cos(phase * 0.8)),
+      center: Offset(
+        size.width * 0.84 + 16 * math.sin(phase),
+        size.height * 0.16 + 18 * math.cos(phase * 0.8),
+      ),
       baseR: s * 0.46,
       phase: phase,
-      alpha: 0.16,
+      alpha: 0.08,
       blur: 18,
       h: const [0.18, 0.12, 0.08],
     );
@@ -398,11 +438,13 @@ class _BlobPainter extends CustomPainter {
     // Larger, softer blob, bottom-left.
     _blob(
       canvas,
-      center: Offset(size.width * 0.12 + 20 * math.cos(phase * 0.7),
-          size.height * 0.92 + 16 * math.sin(phase * 1.1)),
+      center: Offset(
+        size.width * 0.12 + 20 * math.cos(phase * 0.7),
+        size.height * 0.92 + 16 * math.sin(phase * 1.1),
+      ),
       baseR: s * 0.54,
       phase: phase * 1.3 + 1.5,
-      alpha: 0.12,
+      alpha: 0.06,
       blur: 22,
       h: const [0.16, 0.10, 0.07],
     );
@@ -410,11 +452,13 @@ class _BlobPainter extends CustomPainter {
     // Small brighter accent blob roaming the middle.
     _blob(
       canvas,
-      center: Offset(size.width * 0.5 + 34 * math.sin(phase * 1.4),
-          size.height * 0.42 + 22 * math.cos(phase)),
+      center: Offset(
+        size.width * 0.5 + 34 * math.sin(phase * 1.4),
+        size.height * 0.42 + 22 * math.cos(phase),
+      ),
       baseR: s * 0.2,
       phase: phase * 1.7,
-      alpha: 0.10,
+      alpha: 0.05,
       blur: 12,
       h: const [0.24, 0.15, 0.10],
     );
@@ -435,7 +479,8 @@ class _BlobPainter extends CustomPainter {
     final path = Path();
     for (var i = 0; i <= n; i++) {
       final a = (i / n) * 2 * math.pi;
-      final r = baseR *
+      final r =
+          baseR *
           (1 +
               h[0] * math.sin(3 * a + phase) +
               h[1] * math.sin(5 * a - phase * 1.3) +
@@ -451,7 +496,7 @@ class _BlobPainter extends CustomPainter {
     canvas.drawPath(
       path,
       Paint()
-        ..color = Colors.white.withValues(alpha: alpha)
+        ..color = color.withValues(alpha: alpha)
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, blur),
     );
   }
@@ -466,6 +511,18 @@ class _BlobPainter extends CustomPainter {
 const double _kAmplitude = 64;
 
 double _dxFor(int i) => math.sin(i * math.pi / 2) * _kAmplitude;
+
+/// Mascot art that lives in the gaps between levels, one per trail. Cycled in
+/// order down the path; each stays greyed out until the level just below it is
+/// cleared, then springs to colour.
+const List<String> _kMascots = <String>[
+  'lib/assets/mascot/3.png',
+  'lib/assets/mascot/4.png',
+  'lib/assets/mascot/5.png',
+  'lib/assets/mascot/6.png',
+  'lib/assets/mascot/7.png',
+  'lib/assets/mascot/8.png',
+];
 
 class _WeekPath extends StatelessWidget {
   const _WeekPath({required this.week});
@@ -530,8 +587,7 @@ class _WeekPath extends StatelessWidget {
                     done: levels[i - 1].isCompleted,
                     // A mascot sits in the gap; it stays greyed out until the
                     // level just below it is cleared, then springs to colour.
-                    // TODO(art): supply real art via `mascotAsset:` later, e.g.
-                    //   mascotAsset: 'assets/mascots/owl.png'
+                    mascotAsset: _kMascots[(i - 1) % _kMascots.length],
                     mascotUnlocked: levels[i].isCompleted,
                     mascotOnLeft: i.isEven,
                   ),
@@ -562,7 +618,6 @@ class _Trail extends StatelessWidget {
     required this.done,
     required this.mascotUnlocked,
     required this.mascotOnLeft,
-    // ignore: unused_element_parameter
     this.mascotAsset,
   });
 
@@ -579,9 +634,15 @@ class _Trail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    // Sit the mascot in whichever side the path *isn't* leaning into, so the
+    // bigger art never overlaps the connector or the level nodes. When the gap
+    // is centred (current level pinned to middle) fall back to the zigzag
+    // parity so consecutive mascots still alternate sides.
+    final lean = fromDx + toDx;
+    final onLeft = lean == 0 ? mascotOnLeft : lean > 0;
     return SizedBox(
       width: double.infinity,
-      height: 62,
+      height: 128,
       child: Stack(
         alignment: Alignment.center,
         children: [
@@ -595,9 +656,9 @@ class _Trail extends StatelessWidget {
             ),
           ),
           Align(
-            alignment: mascotOnLeft
-                ? const Alignment(-0.66, 0)
-                : const Alignment(0.66, 0),
+            alignment: onLeft
+                ? const Alignment(-0.82, 0)
+                : const Alignment(0.82, 0),
             child: _MascotSlot(unlocked: mascotUnlocked, asset: mascotAsset),
           ),
         ],
@@ -617,7 +678,7 @@ class _MascotSlot extends StatelessWidget {
   final bool unlocked;
   final String? asset;
 
-  static const double size = 50;
+  static const double size = 124;
 
   @override
   Widget build(BuildContext context) {

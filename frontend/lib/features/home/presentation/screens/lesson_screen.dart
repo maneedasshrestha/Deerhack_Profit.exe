@@ -6,6 +6,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/ui_kit.dart';
 import '../../application/study_providers.dart';
 import '../../domain/mock_data.dart';
+import '../widgets/streak_celebration_screen.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // LessonScreen — daily MCQ level.
@@ -96,6 +97,26 @@ class _LessonScreenState extends ConsumerState<LessonScreen> {
 
   void _retry() => setState(() => _phase = _Phase.answering);
 
+  /// Finishing the day's MCQs extends the streak and shows the celebration,
+  /// then returns to the week once the learner taps continue.
+  void _finishWithStreak() {
+    final from = ref.read(streakProvider.notifier).registerDayComplete();
+    final to = ref.read(streakProvider);
+    final navigator = Navigator.of(context);
+    navigator.push(
+      MaterialPageRoute(
+        builder: (_) => StreakCelebrationScreen(
+          fromStreak: from,
+          toStreak: to,
+          onContinue: () {
+            navigator.pop(); // close the celebration
+            navigator.pop(); // leave the lesson, back to the week
+          },
+        ),
+      ),
+    );
+  }
+
   void _next() {
     if (_qIndex >= widget.questions.length - 1) {
       setState(() {}); // _done now true → completion view
@@ -122,7 +143,7 @@ class _LessonScreenState extends ConsumerState<LessonScreen> {
         xp: _xp,
         correct: _correctCount,
         total: _results.length,
-        onFinish: () => Navigator.of(context).pop(),
+        onFinish: _finishWithStreak,
       );
     }
 
@@ -929,7 +950,10 @@ class _CompletionView extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              AppButton(label: 'Back to my week', onTap: onFinish),
+              AppButton(
+                  label: 'Continue',
+                  icon: Icons.local_fire_department_rounded,
+                  onTap: onFinish),
               const SizedBox(height: 8),
             ],
           ),

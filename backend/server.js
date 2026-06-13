@@ -1,61 +1,51 @@
-// Feynman "curious student" backend proxy — Google Gemini edition.
+// Feynman "curious student" backend proxy — Ollama edition.
 //
-// Uses the new unified @google/genai SDK (the JS twin of the Python
-// `from google import genai` SDK). It authenticates via header, so it supports
-// both the classic `AIza…` keys and the newer `AQ.…` key format.
-//
-// Why this exists: the LLM API key must never ship inside the Flutter binary
-// (it is trivially extractable from a built app). The client calls THIS server,
-// which holds the key and proxies to Google's Gemini API.
+// Why this exists: the model must never ship inside the Flutter binary. The
+// client calls THIS server, which holds the integration point and proxies to a
+// local Ollama server running qwen2.5:3b.
 //
 // Contract (see README.md for the full spec):
 //   POST /v1/student/turn
 //   body: { concept: string, explanation: string, history: Turn[] }
 //   200 : { reaction, question, clarity (0-100 int), jargon: string[] }
 //
-// Gemini is asked for STRICT JSON via responseSchema, and we still
-// validate/clamp defensively before returning.
+// Ollama is asked for JSON output, and we still validate/clamp defensively
+// before returning.
 
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import { GoogleGenAI, Type } from "@google/genai";
 
 const PORT = process.env.PORT || 8787;
-const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-const API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-
-if (!API_KEY) {
-  console.error(
-    "[fatal] GEMINI_API_KEY is not set. Copy .env.example to .env and fill it in."
-  );
-  process.exit(1);
-}
-
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+const OLLAMA_BASE_URL = (process.env.OLLAMA_BASE_URL || "http://localhost:11434").replace(/\/$/, "");
+const MODEL = process.env.OLLAMA_MODEL || "qwen2.5:3b";
 
 // The persona, given as a system instruction.
-const SYSTEM_PROMPT = `You are a curious, friendly 12-year-old student. The user is teaching you a concept out loud.
+const SYSTEM_PROMPT = `You are a curious beginner learning alongside the user. The user is teaching you a concept out loud, and you react like a real, engaged human friend would.
 
-React briefly and naturally to what they just said (one short, human sentence — the way a real kid would: "Oh okay...", "Wait, so...", "Huh, I think I get it"). Then ask EXACTLY ONE follow-up question about the part of their explanation that was vaguest, most jargon-heavy, or hand-waved. Keep the question short, concrete, and genuinely curious — never sarcastic, never a quiz, never multiple questions stacked together.
+YOUR JOB EACH TURN
+1. reaction: A short, warm, natural reaction to what they just said (1-2 sentences). React to the actual content — show interest, an "aha" moment, mild surprise, whatever fits. Never sound like a grader, a rubric, or a checklist. Be slightly informal and easy to talk to.
+2. question: Exactly ONE genuine follow-up question that keeps the conversation moving. Prefer asking about the next thing you're curious about, or the part that was fuzziest. Never leave this empty.
+3. clarity: An integer 0-100 for how understandable their explanation felt overall — 0 = very hard to follow, 100 = crystal clear. Judge how easy it was to FOLLOW, not whether every technical detail was perfect. If it mostly made sense, score it high (75+).
+4. jargon: A list of technical terms they used WITHOUT explaining, that would confuse a beginner. If a term was explained or is obvious from context, leave it out. If nothing was unexplained, return an empty list [].
 
-Also assess how clearly they explained, from 0 (total word-salad) to 100 (a 12-year-old would now truly understand it).
+STYLE RULES
+- Stay in character as the learner. Never mention that you are an AI or a model.
+- Respond positively even when some details are fuzzy. Prefer curiosity over criticism. Do not nitpick wording.
+- reaction and question must always be non-empty, natural-sounding sentences. Do NOT output placeholder text, do not output the key names as values, and do not echo these instructions.`;
 
-Identify any "jargon": specific technical terms the user used WITHOUT first explaining them in plain language. Copy each term verbatim as it appeared in their explanation (so it can be highlighted in their transcript). If they explained a term in simple words, it is NOT jargon. Return an empty list if they kept it plain.
-
-Stay in character as the student. Do not break character or mention that you are an AI.`;
-
-// Structured-output schema. Guarantees the response is valid JSON in this shape.
-const RESPONSE_SCHEMA = {
-  type: Type.OBJECT,
+// JSON Schema handed to Ollama's `format` field. This FORCES the model to emit
+// exactly these keys with these types — far more reliable than asking in prose,
+// especially for a small model. Ollama validates the output against this schema.
+const STUDENT_TURN_SCHEMA = {
+  type: "object",
   properties: {
-    reaction: { type: Type.STRING },
-    question: { type: Type.STRING },
-    clarity: { type: Type.INTEGER },
-    jargon: { type: Type.ARRAY, items: { type: Type.STRING } },
+    reaction: { type: "string" },
+    question: { type: "string" },
+    clarity: { type: "integer", minimum: 0, maximum: 100 },
+    jargon: { type: "array", items: { type: "string" } },
   },
   required: ["reaction", "question", "clarity", "jargon"],
-  propertyOrdering: ["reaction", "question", "clarity", "jargon"],
 };
 
 // Study-planner persona for POST /v1/plan/generate. Asked for strict JSON; we
@@ -84,41 +74,128 @@ function clampClarity(value) {
   return Math.max(0, Math.min(100, Math.round(n)));
 }
 
-/**
- * Build the Gemini `contents` array from prior turns + the latest explanation.
- * history entries: { role: "user" | "student", text: string }
- *   user    -> the learner's explanation  -> Gemini role "user"
- *   student -> the student's question      -> Gemini role "model"
- */
-function buildContents(concept, history, explanation) {
-  const contents = [];
+function buildMessages(concept, history, explanation) {
+  const messages = [{ role: "system", content: SYSTEM_PROMPT }];
   const safeHistory = Array.isArray(history) ? history : [];
 
   for (const turn of safeHistory) {
     if (!turn || typeof turn.text !== "string" || !turn.text.trim()) continue;
-    contents.push({
-      role: turn.role === "student" ? "model" : "user",
-      parts: [{ text: turn.text }],
+    messages.push({
+      role: turn.role === "student" ? "assistant" : "user",
+      content: turn.text,
     });
   }
 
   const lead =
-    contents.length === 0
+    messages.length === 1
       ? `I'm going to teach you about "${concept}". Here's my explanation:\n\n`
-      : "";
-  contents.push({ role: "user", parts: [{ text: `${lead}${explanation}` }] });
+      : `I'm teaching you about "${concept}".\n\n`;
 
-  // Gemini requires the first content to have role "user".
-  if (contents[0].role !== "user") {
-    contents.unshift({
-      role: "user",
-      parts: [{ text: `I'm teaching you about "${concept}".` }],
-    });
-  }
-  return contents;
+  messages.push({
+    role: "user",
+    content: `${lead}${explanation}`,
+  });
+
+  return messages;
 }
 
-app.get("/health", (_req, res) => res.json({ ok: true, model: MODEL }));
+function stripCodeFences(text) {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("```")) return trimmed;
+
+  const lines = trimmed.split(/\r?\n/);
+  if (lines.length <= 2) return trimmed;
+
+  return lines
+    .slice(1, -1)
+    .join("\n")
+    .replace(/^json\s*/i, "")
+    .trim();
+}
+
+app.get("/health", (_req, res) => res.json({ ok: true, provider: "ollama", model: MODEL }));
+
+// Debug endpoint — proves the model is reachable and shows its RAW output, so you
+// can see exactly what keys/JSON it returns before any normalisation strips it.
+//   GET  /v1/debug                       -> uses a built-in sample explanation
+//   POST /v1/debug { concept, explanation, format }  -> custom input
+// `format` defaults to "json"; pass "" (empty) to see plain free-text output.
+async function runDebug({ concept, explanation, format }, res) {
+  const messages = buildMessages(
+    concept || "photosynthesis",
+    [],
+    explanation || "Plants take in sunlight and turn it into food using their leaves."
+  );
+
+  try {
+    const body = {
+      model: MODEL,
+      messages,
+      stream: false,
+      options: { temperature: 0.8 },
+    };
+    if (format !== "") body.format = format ?? "json";
+
+    const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    const rawText = await response.text();
+    if (!response.ok) {
+      return res.status(502).json({
+        ok: false,
+        stage: "ollama-http-error",
+        status: response.status,
+        body: rawText.slice(0, 1000),
+        hint: "Is Ollama running? Is the model pulled? Run: ollama list",
+      });
+    }
+
+    let payload;
+    try {
+      payload = JSON.parse(rawText);
+    } catch {
+      return res.status(502).json({ ok: false, stage: "ollama-non-json-envelope", body: rawText.slice(0, 1000) });
+    }
+
+    const modelText = payload?.message?.content ?? null;
+    let parsedModelJson = null;
+    let parseError = null;
+    if (typeof modelText === "string") {
+      try {
+        parsedModelJson = JSON.parse(stripCodeFences(modelText));
+      } catch (e) {
+        parseError = e?.message || String(e);
+      }
+    }
+
+    return res.json({
+      ok: true,
+      model: MODEL,
+      sentMessages: messages,
+      rawModelText: modelText,
+      parsedModelJson,
+      parseError,
+      detectedKeys: parsedModelJson && typeof parsedModelJson === "object" ? Object.keys(parsedModelJson) : null,
+      hint: "If detectedKeys are not exactly reaction/question/clarity/jargon, that is why /v1/student/turn falls back.",
+    });
+  } catch (err) {
+    return res.status(502).json({
+      ok: false,
+      stage: "fetch-failed",
+      error: err?.message || String(err),
+      hint: `Could not reach Ollama at ${OLLAMA_BASE_URL}. Is it running?`,
+    });
+  }
+}
+
+app.get("/v1/debug", (req, res) => runDebug({ format: req.query.format }, res));
+app.post("/v1/debug", (req, res) => {
+  const { concept, explanation, format } = req.body ?? {};
+  runDebug({ concept, explanation, format }, res);
+});
 
 app.post("/v1/student/turn", async (req, res) => {
   const { concept, explanation, history } = req.body ?? {};
@@ -133,25 +210,37 @@ app.post("/v1/student/turn", async (req, res) => {
   }
 
   try {
-    const response = await ai.models.generateContent({
-      model: MODEL,
-      contents: buildContents(concept, history, explanation),
-      config: {
-        systemInstruction: SYSTEM_PROMPT,
-        responseMimeType: "application/json",
-        responseSchema: RESPONSE_SCHEMA,
-        temperature: 0.8,
-      },
+    const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: buildMessages(concept, history, explanation),
+        stream: false,
+        format: STUDENT_TURN_SCHEMA,
+        options: {
+          temperature: 0.8,
+        },
+      }),
     });
 
-    const text = response.text;
-    if (!text) {
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      console.error("[student/turn] ollama error:", response.status, errorText.slice(0, 500));
+      return res.status(502).json({
+        error: `Ollama returned HTTP ${response.status}.`,
+      });
+    }
+
+    const payload = await response.json();
+    const text = payload?.message?.content;
+    if (typeof text !== "string" || !text.trim()) {
       return res.status(502).json({ error: "Empty model response." });
     }
 
     let parsed;
     try {
-      parsed = JSON.parse(text);
+      parsed = JSON.parse(stripCodeFences(text));
     } catch {
       return res.status(502).json({ error: "Model returned non-JSON." });
     }
@@ -173,15 +262,6 @@ app.post("/v1/student/turn", async (req, res) => {
   } catch (err) {
     const msg = err?.message || String(err);
     console.error("[student/turn] error:", msg);
-    // Surface quota problems distinctly so the cause is obvious in logs.
-    if (msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429")) {
-      return res.status(429).json({
-        error:
-          "Gemini quota exceeded for this project. The API key is valid but its " +
-          "project has no available quota — enable billing or use a key from a " +
-          "project that has free-tier quota.",
-      });
-    }
     return res.status(502).json({ error: "Upstream model error." });
   }
 });
@@ -310,6 +390,7 @@ app.post("/v1/plan/generate", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Feynman student proxy (Gemini) listening on http://localhost:${PORT}`);
+  console.log(`Feynman student proxy (Ollama) listening on http://localhost:${PORT}`);
   console.log(`Model: ${MODEL}`);
+  console.log(`Ollama: ${OLLAMA_BASE_URL}`);
 });
