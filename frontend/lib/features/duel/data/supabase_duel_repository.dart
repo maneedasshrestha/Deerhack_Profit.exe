@@ -23,10 +23,15 @@ class SupabaseDuelRepository implements DuelRepository {
 
   @override
   Future<void> registerSelf(DuelPlayer me) async {
-    await _sb.from(_players).upsert({
+    final row = {
       ...me.toJson(),
       'updated_at': _now(),
-    });
+    };
+    // Don't let a transient null (e.g. auth session not yet restored on app
+    // open) wipe a previously-stored avatar. Only write photo_url when we have
+    // one; omitted columns keep their existing value on upsert-conflict.
+    if (me.photoUrl == null) row.remove('photo_url');
+    await _sb.from(_players).upsert(row);
   }
 
   @override
@@ -45,11 +50,13 @@ class SupabaseDuelRepository implements DuelRepository {
       questionIds: questionIds,
       challengerId: challenger.id,
       challengerName: challenger.displayName,
+      challengerPhotoUrl: challenger.photoUrl,
       challengerAnswers: challengerAnswers,
       challengerScore: challengerScore,
       challengerFinishedAt: DateTime.now().toUtc(),
       opponentId: targetOpponent?.id,
       opponentName: targetOpponent?.displayName,
+      opponentPhotoUrl: targetOpponent?.photoUrl,
     );
     final row = await _sb
         .from(_duels)
@@ -87,6 +94,7 @@ class SupabaseDuelRepository implements DuelRepository {
         .update({
           'opponent_id': opponent.id,
           'opponent_name': opponent.displayName,
+          'opponent_photo_url': opponent.photoUrl,
           'opponent_score': opponentScore,
           'opponent_finished_at': _now(),
           'winner_id': winnerId,

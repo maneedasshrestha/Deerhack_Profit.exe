@@ -32,13 +32,15 @@ class DuelIdentity {
     return id;
   }
 
-  /// Build the player row for [displayName], using the stored id.
-  DuelPlayer playerFor(String displayName) {
+  /// Build the player row for [displayName], using the stored id. [photoUrl]
+  /// should be a shareable network URL (or null) — see [DuelPlayer.photoUrl].
+  DuelPlayer playerFor(String displayName, {String? photoUrl}) {
     final name = displayName.trim().isEmpty ? 'Player' : displayName.trim();
     return DuelPlayer(
       id: playerId,
       displayName: name,
       initials: DuelPlayer.initialsFor(name),
+      photoUrl: photoUrl,
     );
   }
 

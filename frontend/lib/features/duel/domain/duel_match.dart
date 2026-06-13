@@ -36,11 +36,13 @@ class DuelMatch {
     required this.questionIds,
     required this.challengerId,
     required this.challengerName,
+    this.challengerPhotoUrl,
     this.challengerAnswers = const [],
     this.challengerScore,
     this.challengerFinishedAt,
     this.opponentId,
     this.opponentName,
+    this.opponentPhotoUrl,
     this.opponentScore,
     this.opponentFinishedAt,
     this.winnerId,
@@ -60,6 +62,10 @@ class DuelMatch {
   final String challengerId;
   final String challengerName;
 
+  /// Network avatar URL of the challenger, for showing their face on the
+  /// opponent's challenge inbox. Null → gradient-initials fallback.
+  final String? challengerPhotoUrl;
+
   /// Per-question correctness of the challenger's run — replayed as a "ghost"
   /// race for the opponent so the existing race visuals stay faithful.
   final List<bool> challengerAnswers;
@@ -68,6 +74,9 @@ class DuelMatch {
 
   final String? opponentId;
   final String? opponentName;
+
+  /// Network avatar URL of the opponent (set once they play). Null → fallback.
+  final String? opponentPhotoUrl;
   final int? opponentScore;
   final DateTime? opponentFinishedAt;
 
@@ -114,6 +123,7 @@ class DuelMatch {
   DuelMatch copyWith({
     String? opponentId,
     String? opponentName,
+    String? opponentPhotoUrl,
     int? opponentScore,
     DateTime? opponentFinishedAt,
     String? winnerId,
@@ -126,11 +136,13 @@ class DuelMatch {
         questionIds: questionIds,
         challengerId: challengerId,
         challengerName: challengerName,
+        challengerPhotoUrl: challengerPhotoUrl,
         challengerAnswers: challengerAnswers,
         challengerScore: challengerScore,
         challengerFinishedAt: challengerFinishedAt,
         opponentId: opponentId ?? this.opponentId,
         opponentName: opponentName ?? this.opponentName,
+        opponentPhotoUrl: opponentPhotoUrl ?? this.opponentPhotoUrl,
         opponentScore: opponentScore ?? this.opponentScore,
         opponentFinishedAt: opponentFinishedAt ?? this.opponentFinishedAt,
         winnerId: winnerId ?? this.winnerId,
@@ -153,11 +165,13 @@ class DuelMatch {
       questionIds: ids(json['question_ids']),
       challengerId: json['challenger_id'] as String,
       challengerName: json['challenger_name'] as String? ?? 'Challenger',
+      challengerPhotoUrl: json['challenger_photo_url'] as String?,
       challengerAnswers: bools(json['challenger_answers']),
       challengerScore: json['challenger_score'] as int?,
       challengerFinishedAt: date(json['challenger_finished_at']),
       opponentId: json['opponent_id'] as String?,
       opponentName: json['opponent_name'] as String?,
+      opponentPhotoUrl: json['opponent_photo_url'] as String?,
       opponentScore: json['opponent_score'] as int?,
       opponentFinishedAt: date(json['opponent_finished_at']),
       winnerId: json['winner_id'] as String?,
@@ -173,11 +187,13 @@ class DuelMatch {
         'question_ids': questionIds,
         'challenger_id': challengerId,
         'challenger_name': challengerName,
+        'challenger_photo_url': challengerPhotoUrl,
         'challenger_answers': challengerAnswers,
         'challenger_score': challengerScore,
         'challenger_finished_at': challengerFinishedAt?.toIso8601String(),
         'opponent_id': opponentId,
         'opponent_name': opponentName,
+        'opponent_photo_url': opponentPhotoUrl,
         'status': _statusTo(status),
       };
 }
