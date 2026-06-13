@@ -38,11 +38,13 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
         // User dismissed the consent sheet — just reset the button.
         setState(() => _signingIn = false);
       }
-    } catch (_) {
+    } catch (e, st) {
+      // TEMP: surface the real error while debugging Google sign-in setup.
+      debugPrint('Google sign-in failed: $e\n$st');
       if (!mounted) return;
       setState(() => _signingIn = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Couldn't sign in. Please try again.")),
+        SnackBar(content: Text("Sign-in error: $e")),
       );
     }
   }

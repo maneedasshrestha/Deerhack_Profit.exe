@@ -58,7 +58,10 @@ Future<void> main() async {
         // otherwise the providers keep their mock/no-op defaults.
         if (SupabaseConfig.isConfigured) ...[
           authServiceProvider.overrideWithValue(
-            SupabaseAuthService(webClientId: SupabaseConfig.googleWebClientId),
+            SupabaseAuthService(
+              webClientId: SupabaseConfig.googleWebClientId,
+              iosClientId: SupabaseConfig.googleIosClientId,
+            ),
           ),
           profileSyncProvider
               .overrideWithValue(const SupabaseProfileSyncService()),
