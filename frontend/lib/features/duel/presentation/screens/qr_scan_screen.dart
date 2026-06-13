@@ -1,25 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../../../core/haptics.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../home/domain/mock_data.dart';
+import '../../application/duel_providers.dart';
 import '../../domain/duel_invite.dart';
+import '../../domain/duel_match.dart';
+import '../../domain/duel_player.dart';
 import 'duel_race_screen.dart';
 
 /// A full-screen QR scanner backed by the device camera (mobile_scanner). When
-/// it reads a valid duel-invite code it locks on, confirms the matched player,
-/// then drops straight into the live race.
-class QrScanScreen extends StatefulWidget {
+/// it reads a valid duel code it looks the challenge up on the backend, locks
+/// on, then drops straight into the live race as the opponent.
+class QrScanScreen extends ConsumerStatefulWidget {
   const QrScanScreen({super.key});
 
   @override
-  State<QrScanScreen> createState() => _QrScanScreenState();
+  ConsumerState<QrScanScreen> createState() => _QrScanScreenState();
 }
 
-class _QrScanScreenState extends State<QrScanScreen>
+class _QrScanScreenState extends ConsumerState<QrScanScreen>
     with TickerProviderStateMixin {
   final MobileScannerController _controller = MobileScannerController(
     detectionSpeed: DetectionSpeed.noDuplicates,
@@ -37,37 +40,67 @@ class _QrScanScreenState extends State<QrScanScreen>
 
   bool _handled = false;
   bool _analyzing = false;
-  String? _matchedName;
+  DuelMatch? _matched;
 
   void _onDetect(BarcodeCapture capture) {
     if (_handled) return;
-    _matchFrom(capture);
+    final code = _codeFrom(capture);
+    if (code != null) _handleCode(code);
   }
 
-  /// Returns true if a valid (non-self) invite was found and locked onto.
-  bool _matchFrom(BarcodeCapture? capture) {
+  String? _codeFrom(BarcodeCapture? capture) {
     for (final barcode in capture?.barcodes ?? const <Barcode>[]) {
-      final name = DuelInvite.resolveName(barcode.rawValue);
-      if (name != null && name != MockData.userName) {
-        _lockOnto(name);
-        return true;
-      }
+      final code = DuelInvite.resolveCode(barcode.rawValue);
+      if (code != null) return code;
     }
-    return false;
+    return null;
   }
 
-  /// Pick an image from the gallery and look for a race code inside it.
+  /// Resolve a code to a playable challenge, then lock on and race it.
+  Future<void> _handleCode(String code) async {
+    if (_handled) return;
+    _handled = true; // prevent duplicate detections while we resolve
+    final me = ref.read(currentPlayerProvider);
+    try {
+      final duel = await ref.read(duelControllerProvider).loadByCode(code);
+      if (!mounted) return;
+      if (duel == null) {
+        _handled = false;
+        _showSnack('No duel found for that code');
+        return;
+      }
+      if (duel.challengerId == me.id) {
+        _handled = false;
+        _showSnack('That\'s your own challenge code');
+        return;
+      }
+      if (duel.isCompleted) {
+        _handled = false;
+        _showSnack('That challenge has already been played');
+        return;
+      }
+      await _lockOnto(duel);
+    } catch (_) {
+      if (!mounted) return;
+      _handled = false;
+      _showSnack('Couldn\'t reach the duel. Check your connection.');
+    }
+  }
+
+  /// Pick an image from the gallery and look for a duel code inside it.
   Future<void> _pickFromGallery() async {
     if (_handled || _analyzing) return;
     setState(() => _analyzing = true);
     try {
-      final file =
-          await ImagePicker().pickImage(source: ImageSource.gallery);
+      final file = await ImagePicker().pickImage(source: ImageSource.gallery);
       if (file == null || _handled) return;
       final capture = await _controller.analyzeImage(file.path);
       if (!mounted || _handled) return;
-      if (!_matchFrom(capture)) {
+      final code = _codeFrom(capture);
+      if (code == null) {
         _showSnack('No valid duel code found in that image');
+      } else {
+        await _handleCode(code);
       }
     } catch (_) {
       if (mounted) _showSnack('Couldn\'t read a code from that image');
@@ -82,12 +115,11 @@ class _QrScanScreenState extends State<QrScanScreen>
     );
   }
 
-  Future<void> _lockOnto(String name) async {
-    _handled = true;
+  Future<void> _lockOnto(DuelMatch duel) async {
     Haptics.sessionStart();
     await _controller.stop();
     if (!mounted) return;
-    setState(() => _matchedName = name);
+    setState(() => _matched = duel);
     _scan.stop();
     _lock.forward();
     await Future<void>.delayed(const Duration(milliseconds: 1000));
@@ -95,7 +127,7 @@ class _QrScanScreenState extends State<QrScanScreen>
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         fullscreenDialog: true,
-        builder: (_) => DuelRaceScreen(opponentName: name),
+        builder: (_) => DuelRaceScreen.accept(duel: duel),
       ),
     );
   }
@@ -112,7 +144,7 @@ class _QrScanScreenState extends State<QrScanScreen>
   Widget build(BuildContext context) {
     final p = context.palette;
     final text = Theme.of(context).textTheme;
-    final detected = _matchedName != null;
+    final detected = _matched != null;
 
     return Scaffold(
       backgroundColor: const Color(0xFF07070A),
@@ -186,7 +218,7 @@ class _QrScanScreenState extends State<QrScanScreen>
                           parent: _lock,
                           curve: Curves.easeOutBack,
                         ),
-                        child: _MatchedBadge(name: _matchedName!),
+                        child: _MatchedBadge(name: _matched!.challengerName),
                       ),
                     ),
                 ],
@@ -202,7 +234,7 @@ class _QrScanScreenState extends State<QrScanScreen>
             child: Column(
               children: [
                 Text(
-                  detected ? 'Code matched' : 'Scanning for a code…',
+                  detected ? 'Challenge matched' : 'Scanning for a code…',
                   textAlign: TextAlign.center,
                   style: text.titleMedium?.copyWith(color: Colors.white),
                 ),
@@ -210,7 +242,7 @@ class _QrScanScreenState extends State<QrScanScreen>
                 Text(
                   detected
                       ? 'Starting your duel'
-                      : 'Point at a friend\'s duel code to challenge them',
+                      : 'Point at a friend\'s duel code to take their challenge',
                   textAlign: TextAlign.center,
                   style: text.bodyMedium?.copyWith(
                     color: Colors.white.withValues(alpha: 0.7),
@@ -352,10 +384,7 @@ class _MatchedBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final text = Theme.of(context).textTheme;
-    final initials = MockData.friends.firstWhere(
-      (f) => f['name'] == name,
-      orElse: () => {'initials': name.isNotEmpty ? name[0] : '?'},
-    )['initials'] as String;
+    final initials = DuelPlayer.initialsFor(name);
 
     return Column(
       mainAxisSize: MainAxisSize.min,

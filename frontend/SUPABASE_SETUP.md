@@ -132,6 +132,69 @@ create policy "avatars_read_all"
 
 ---
 
+## 6b. Duel / Versus mode → `duel_players` + `duels`
+The duel feature (async "beat my run" challenges) is backed by two tables. Run
+the full migration in **SQL Editor**, or copy it from
+[`supabase/migrations/0001_duel.sql`](supabase/migrations/0001_duel.sql):
+
+```sql
+create table if not exists public.duel_players (
+  id           uuid primary key,
+  display_name text not null,
+  initials     text not null,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+create index if not exists duel_players_updated_at_idx
+  on public.duel_players (updated_at desc);
+
+create table if not exists public.duels (
+  id                     uuid primary key default gen_random_uuid(),
+  code                   text not null unique,
+  topic                  text not null,
+  question_ids           jsonb not null,
+  challenger_id          uuid not null references public.duel_players(id) on delete cascade,
+  challenger_name        text not null,
+  challenger_answers     jsonb,
+  challenger_score       int,
+  challenger_finished_at timestamptz,
+  opponent_id            uuid references public.duel_players(id) on delete set null,
+  opponent_name          text,
+  opponent_score         int,
+  opponent_finished_at   timestamptz,
+  winner_id              uuid references public.duel_players(id) on delete set null,
+  status                 text not null default 'awaiting_opponent',
+  created_at             timestamptz not null default now(),
+  updated_at             timestamptz not null default now()
+);
+create index if not exists duels_code_idx       on public.duels (code);
+create index if not exists duels_challenger_idx  on public.duels (challenger_id);
+create index if not exists duels_opponent_idx    on public.duels (opponent_id);
+create index if not exists duels_status_idx      on public.duels (status);
+
+alter table public.duel_players enable row level security;
+alter table public.duels        enable row level security;
+
+-- NOTE: duel identity is a device-generated UUID, not a Supabase auth user, so
+-- these policies are intentionally permissive for the anon role. Harden them by
+-- migrating duels onto real auth and scoping by auth.uid() (see the migration).
+create policy "duel_players_anon_read"   on public.duel_players for select to anon, authenticated using (true);
+create policy "duel_players_anon_write"  on public.duel_players for insert to anon, authenticated with check (true);
+create policy "duel_players_anon_update" on public.duel_players for update to anon, authenticated using (true) with check (true);
+create policy "duels_anon_read"   on public.duels for select to anon, authenticated using (true);
+create policy "duels_anon_write"  on public.duels for insert to anon, authenticated with check (true);
+create policy "duels_anon_update" on public.duels for update to anon, authenticated using (true) with check (true);
+```
+
+The optional `duel_leaderboard` view (wins/losses/played per player) is in the
+migration file too.
+
+> Without these tables the duel screen still runs — it falls back to an
+> in-memory repository, so challenges work on a single device but don't persist
+> or reach a second device.
+
+---
+
 ## 7. Run the app with your config
 ```bash
 flutter run \
