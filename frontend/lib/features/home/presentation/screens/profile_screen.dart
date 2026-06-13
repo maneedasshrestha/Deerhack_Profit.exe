@@ -9,6 +9,7 @@ import '../../../onboarding/domain/curated_plan.dart';
 import '../../application/study_providers.dart';
 import '../../domain/mock_data.dart';
 import '../../domain/plan_data.dart';
+import 'question_bank_screen.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ProfileScreen — calm and scannable. Three ideas, one per section:
@@ -56,23 +57,30 @@ class ProfileScreen extends ConsumerWidget {
                   const SliverToBoxAdapter(child: SizedBox(height: 16)),
                   const SliverToBoxAdapter(
                       child: StaggeredEntrance(child: _ProfileHeader())),
+                  const SliverToBoxAdapter(
+                      child: StaggeredEntrance(
+                          index: 1, child: _ExamCountdownBanner())),
                   const SliverToBoxAdapter(child: _CuratedPlanSection()),
                   const SliverToBoxAdapter(child: SectionHeader('Syllabus')),
                   const SliverToBoxAdapter(
                       child: StaggeredEntrance(
-                          index: 1, child: _SyllabusCard())),
+                          index: 2, child: _SyllabusCard())),
                   const SliverToBoxAdapter(child: SectionHeader('Your plan')),
                   const SliverToBoxAdapter(
                       child: StaggeredEntrance(
-                          index: 2, child: _PlanTimelineCard())),
+                          index: 3, child: _PlanTimelineCard())),
+                  const SliverToBoxAdapter(child: SectionHeader('Practice')),
+                  const SliverToBoxAdapter(
+                      child: StaggeredEntrance(
+                          index: 4, child: _QuestionBankCard())),
                   const SliverToBoxAdapter(child: SizedBox(height: 24)),
                   const SliverToBoxAdapter(
                       child: StaggeredEntrance(
-                          index: 3, child: _StarredSection())),
+                          index: 5, child: _StarredSection())),
                   const SliverToBoxAdapter(child: SizedBox(height: 28)),
                   const SliverToBoxAdapter(
                       child: StaggeredEntrance(
-                          index: 4, child: _RestartOnboardingButton())),
+                          index: 6, child: _RestartOnboardingButton())),
                   const SliverToBoxAdapter(child: SizedBox(height: 40)),
                 ],
               ),
@@ -99,7 +107,6 @@ class _ProfileHeader extends ConsumerWidget {
         name.split(' ').map((w) => w[0]).take(2).join();
     final examName = profile?.examName ?? PlanData.examName;
     final targetMarks = profile?.targetMarks ?? PlanData.targetMarks;
-    final days = profile?.daysToExam() ?? PlanData.daysToExam;
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
       child: Row(
@@ -137,28 +144,159 @@ class _ProfileHeader extends ConsumerWidget {
               ],
             ),
           ),
-          ProgressRing(
-            progress: (PlanData.currentWeek.weekNumber - 1) /
-                PlanData.currentWeek.totalWeeks,
-            size: 54,
-            strokeWidth: 5,
-            color: p.accent,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '$days',
-                  style: text.labelLarge
-                      ?.copyWith(fontWeight: FontWeight.w800, height: 1),
-                ),
-                Text('days',
-                    style:
-                        text.labelSmall?.copyWith(fontSize: 9, height: 1.2)),
-              ],
-            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Exam countdown banner (the hero) ─────────────────────────────────────────
+// The run-up to D-day, framed as a finish line: a big day count and a runway
+// track that advances each prep week toward the checkered flag.
+class _ExamCountdownBanner extends StatelessWidget {
+  const _ExamCountdownBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    const week = PlanData.currentWeek;
+    final progress =
+        ((week.weekNumber - 1) / week.totalWeeks).clamp(0.0, 1.0);
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: p.hairline, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2A2150).withValues(alpha: 0.06),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.sports_score_rounded, size: 15, color: p.accent),
+              const SizedBox(width: 6),
+              Text(
+                PlanData.examName.toUpperCase(),
+                style: text.labelSmall?.copyWith(
+                  color: p.accent,
+                  letterSpacing: 1.4,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                '${PlanData.daysToExam}',
+                style: text.displayMedium?.copyWith(
+                  color: p.textPrimary,
+                  fontWeight: FontWeight.w800,
+                  height: 1,
+                  fontSize: 52,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  'days to go',
+                  style: text.titleMedium?.copyWith(color: p.textSecondary),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _RunwayBar(progress: progress),
+          const SizedBox(height: 10),
+          Text(
+            'Week ${week.weekNumber} of ${week.totalWeeks}',
+            style: text.labelMedium?.copyWith(color: p.textTertiary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A horizontal "runway" to the exam: a track with a glowing marker at the
+/// current week and a checkered flag at the finish.
+class _RunwayBar extends StatelessWidget {
+  const _RunwayBar({required this.progress});
+
+  final double progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Row(
+      children: [
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, c) {
+              final w = c.maxWidth;
+              final fill = (w * progress).clamp(0.0, w);
+              return SizedBox(
+                height: 14,
+                child: Stack(
+                  alignment: Alignment.centerLeft,
+                  children: [
+                    Container(
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: p.surfaceHigh,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    Container(
+                      width: fill,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: p.accent,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    Positioned(
+                      left: (fill - 7).clamp(0.0, w - 14),
+                      child: Container(
+                        width: 14,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: p.accent,
+                          border: Border.all(color: p.surface, width: 2.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: p.accent.withValues(alpha: 0.45),
+                              blurRadius: 6,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(width: 10),
+        Icon(Icons.sports_score_rounded, size: 22, color: p.textSecondary),
+      ],
     );
   }
 }
@@ -243,6 +381,57 @@ class _SubjectRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ─── Question bank entry ──────────────────────────────────────────────────────
+class _QuestionBankCard extends StatelessWidget {
+  const _QuestionBankCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    final total = PlanData.questionBank
+        .fold<int>(0, (sum, g) => sum + g.questions.length);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: AppCard(
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const QuestionBankScreen()),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: p.accentSoft,
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Icon(Icons.library_books_rounded,
+                  size: 22, color: p.accent),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Question bank', style: text.titleMedium),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Browse all $total questions across every subject',
+                    style: text.labelMedium?.copyWith(color: p.textTertiary),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: p.textTertiary),
+          ],
+        ),
+      ),
     );
   }
 }

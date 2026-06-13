@@ -30,7 +30,7 @@ class WeekLevel {
   final LevelType type;
   final LevelStatus status;
 
-  /// Short tag above the node — "Day 1", "Bonus", "Sunday".
+  /// Short tag above the node — a weekday like "Monday", or "Bonus"/"Sunday".
   final String dayLabel;
   final int stars;
 
@@ -98,6 +98,24 @@ class SubjectProgress {
   double get percent => totalTopics == 0 ? 0 : completedTopics / totalTopics;
 }
 
+/// A subject's topic for the week, bundled with the MCQs that drill it. Used by
+/// the week-detail screen and the full question bank so both read consistently.
+class TopicGroup {
+  const TopicGroup({
+    required this.subject,
+    required this.topic,
+    required this.color,
+    required this.icon,
+    required this.questions,
+  });
+
+  final String subject;
+  final String topic;
+  final Color color;
+  final IconData icon;
+  final List<MockQuestion> questions;
+}
+
 class PlanStats {
   const PlanStats({
     required this.lastMockScore,
@@ -147,7 +165,7 @@ class PlanData {
         subtitle: 'All four subjects · 10 questions',
         type: LevelType.mcq,
         status: LevelStatus.completed,
-        dayLabel: 'Day 1',
+        dayLabel: 'Monday',
         stars: 3,
       ),
       WeekLevel(
@@ -156,7 +174,7 @@ class PlanData {
         subtitle: 'Physics focus · 10 questions',
         type: LevelType.mcq,
         status: LevelStatus.completed,
-        dayLabel: 'Day 2',
+        dayLabel: 'Tuesday',
         stars: 2,
       ),
       WeekLevel(
@@ -165,7 +183,7 @@ class PlanData {
         subtitle: 'Maths focus · 10 questions',
         type: LevelType.mcq,
         status: LevelStatus.current,
-        dayLabel: 'Day 3',
+        dayLabel: 'Wednesday',
       ),
       WeekLevel(
         id: 'w4_bonus',
@@ -181,7 +199,7 @@ class PlanData {
         subtitle: 'Chemistry focus · 10 questions',
         type: LevelType.mcq,
         status: LevelStatus.locked,
-        dayLabel: 'Day 4',
+        dayLabel: 'Thursday',
       ),
       WeekLevel(
         id: 'w4_d5',
@@ -189,7 +207,7 @@ class PlanData {
         subtitle: 'Exam-style mix · 12 questions',
         type: LevelType.mcq,
         status: LevelStatus.locked,
-        dayLabel: 'Day 5',
+        dayLabel: 'Friday',
       ),
       WeekLevel(
         id: 'w4_mock',
@@ -295,6 +313,43 @@ class PlanData {
         ],
     };
   }
+
+  // ── This week's topics, grouped by subject (with their MCQs) ──────────────
+  static const List<TopicGroup> currentWeekTopics = [
+    TopicGroup(
+      subject: 'Physics',
+      topic: 'Work & energy',
+      color: MockData.physicsColor,
+      icon: Icons.bolt_rounded,
+      questions: MockData.workEnergyQuestions,
+    ),
+    TopicGroup(
+      subject: 'Maths',
+      topic: 'Derivatives',
+      color: MockData.mathColor,
+      icon: Icons.functions_rounded,
+      questions: MockData.derivativesQuestions,
+    ),
+    TopicGroup(
+      subject: 'Chemistry',
+      topic: 'Chemical bonding',
+      color: MockData.chemistryColor,
+      icon: Icons.science_rounded,
+      questions: MockData.chemistryQuestions,
+    ),
+  ];
+
+  /// The complete question bank — every topic across every subject.
+  static const List<TopicGroup> questionBank = [
+    ...currentWeekTopics,
+    TopicGroup(
+      subject: 'English',
+      topic: 'Grammar & vocabulary',
+      color: MockData.englishColor,
+      icon: Icons.menu_book_rounded,
+      questions: MockData.englishQuestions,
+    ),
+  ];
 
   // ── Syllabus coverage (profile) ───────────────────────────────────────────
   static const List<SubjectProgress> syllabus = [

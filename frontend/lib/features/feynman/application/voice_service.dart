@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
 /// Wraps `flutter_tts` to give the student a *character* voice — slightly higher
@@ -14,6 +15,24 @@ class VoiceService {
 
   Future<void> _configure() async {
     if (_configured) return;
+    // iOS: by default flutter_tts grabs an exclusive `playback` audio session
+    // and keeps it active after speaking. The next time the learner taps the
+    // orb, `speech_to_text` tries to (re)activate the shared session for
+    // recording and the OS rejects it → `error_listen_failed`. Putting TTS on a
+    // `playAndRecord` + mixWithOthers session that matches what the recognizer
+    // wants lets the two coexist without fighting over the session.
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      await _tts.setIosAudioCategory(
+        IosTextToSpeechAudioCategory.playAndRecord,
+        [
+          IosTextToSpeechAudioCategoryOptions.defaultToSpeaker,
+          IosTextToSpeechAudioCategoryOptions.allowBluetooth,
+          IosTextToSpeechAudioCategoryOptions.allowBluetoothA2DP,
+          IosTextToSpeechAudioCategoryOptions.mixWithOthers,
+        ],
+        IosTextToSpeechAudioMode.voicePrompt,
+      );
+    }
     await _tts.setLanguage('en-US');
     await _tts.setPitch(1.25); // higher → reads as a child
     await _tts.setSpeechRate(0.42); // slower → unhurried, characterful
